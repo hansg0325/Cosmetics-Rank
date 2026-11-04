@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Project-local pnpm launcher, including the Codex Windows bundled runtime.
+set -euo pipefail
+cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
+if command -v node >/dev/null 2>&1 && command -v pnpm >/dev/null 2>&1; then
+  exec pnpm "$@"
+fi
+runtime_home="$HOME"
+if [[ -n "${USERPROFILE:-}" ]] && command -v cygpath >/dev/null 2>&1; then
+  runtime_home="$(cygpath -u "$USERPROFILE")"
+fi
+runtime="$runtime_home/.cache/codex-runtimes/codex-primary-runtime/dependencies/node"
+if [[ ! -f "$runtime/bin/node.exe" || ! -f "$runtime/node_modules/pnpm/bin/pnpm.mjs" ]]; then
+  printf '%s\n' 'Node.js/pnpm을 찾지 못했습니다. Node.js 22 이상과 pnpm 11을 설치한 뒤 다시 실행하세요.' >&2
+  exit 1
+fi
+export PATH="$runtime/bin:$PATH"
+export pnpm_config_pm_on_fail=ignore
+exec "$runtime/bin/node.exe" "$runtime/node_modules/pnpm/bin/pnpm.mjs" "$@"

@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>OliveRank 브라우저 연결</title>
+    <style>
+      body {
+        font:
+          16px system-ui,
+          sans-serif;
+        max-width: 760px;
+        margin: 40px auto;
+        padding: 20px;
+        line-height: 1.9;
+        color: #28332b;
+        background: #f6f7f3;
+      }
+      main {
+        padding: 30px;
+        background: white;
+        border: 1px solid #e4e8de;
+        border-radius: 12px;
+      }
+      code {
+        background: #edf1e5;
+        padding: 3px 7px;
+        overflow-wrap: anywhere;
+      }
+      a {
+        color: #547b2b;
+      }
+      li {
+        margin: 15px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>최초 1회 브라우저 연결</h1>
+      <p>
+        설정 후 앱의 <b>지금 수집하고 저장</b> 버튼만 누르면 됩니다. 북마크나
+        JSON 파일을 옮길 필요가 없습니다.
+      </p>
+      <ol>
+        <li>
+          평소 올리브영이 정상 표시되는 브라우저에서 확장 프로그램 관리 화면을
+          엽니다. 웨일: <code>whale://extensions</code>, Chrome:
+          <code>chrome://extensions</code>, Edge: <code>edge://extensions</code>
+        </li>
+        <li>
+          <b>개발자 모드</b>를 켜고 <b>압축해제된 확장 프로그램을 로드</b>를
+          선택합니다.
+        </li>
+        <li>
+          아래 폴더를 선택합니다.<br /><code
+            >C:\Users\admin\Documents\ChatGPT\Cosmetics Rank\extension</code
+          >
+        </li>
+        <li>
+          <b>같은 브라우저</b>에서
+          <a href="http://127.0.0.1:8787">로컬 OliveRank</a>에 접속해 로그인하고
+          새로고침합니다.
+        </li>
+        <li>
+          <b>지금 수집하고 저장</b>을 누릅니다. 새 랭킹 탭이 잠시 열리고, 정상
+          수집되면 닫히며 앱에 100행 저장 완료가 표시됩니다.
+        </li>
+      </ol>
+      <h2>사용 권한</h2>
+      <p>
+        올리브영 사이트 화면을 읽는 권한과 로컬 OliveRank 버튼 연결만
+        사용합니다. 로그인 쿠키·비밀번호·브라우저 전체 방문 기록을 읽거나
+        저장하지 않습니다. 수집 결과는 로컬 앱에 전달합니다.
+      </p>
+      <p>
+        가격·이미지 제외 / 클릭 시에만 실행 / 예약 실행 없음. 접속 확인이나
+        차단으로 상품이 표시되지 않으면 해당 탭을 보여주고 중단합니다. 차단을
+        해결하거나 우회하지 않습니다.
+      </p>
+      <p>
+        현재 로컬 주소의 8787 포트만 지원합니다. Codex 내장 브라우저와 모바일은
+        이 확장 프로그램을 지원하지 않습니다. 실제 웨일·Chrome·Edge의 설치 및
+        권한 설정은 사용자 브라우저에서 완료해야 합니다.
+      </p>
+      <p>
+        코드가 바뀌면 확장 관리 화면에서 확장 프로그램을 새로고침하고 앱도
+        새로고침하세요.
+      </p>
+      <a href="/">← OliveRank로 돌아가기</a>
+    </main>
+  </body>
+</html>
