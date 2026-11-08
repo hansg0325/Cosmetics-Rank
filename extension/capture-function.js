@@ -40,7 +40,7 @@ const capture=function captureRanking(doc, pageUrl, now) {
         new Set(rows.map((r) => r.product_id)).size !== 100)
         throw new Error(`전체 1~100위가 필요합니다. 현재 ${rows.length}개입니다. 페이지가 모두 표시된 뒤 실행하세요.`);
     return {
-        format: "oliverank-browser-v1",
+        format: "cosmetics-rank-browser-v1",
         source_url: "https://www.oliveyoung.co.kr/store/main/getBestList.do",
         collected_at: now,
         ranking_date: new Intl.DateTimeFormat("sv-SE", {

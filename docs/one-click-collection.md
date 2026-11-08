@@ -4,7 +4,7 @@
 
 1. Git Bash에서 프로젝트 폴더로 이동한 뒤 `bash ./start-local.sh`로 실행합니다.
 2. 평소 사용하는 웨일·Chrome·Edge에서 확장 프로그램 관리 → 개발자 모드 → 압축해제된 확장 프로그램 로드를 선택합니다.
-3. `C:\Users\admin\Documents\ChatGPT\Cosmetics Rank\extension` 폴더를 선택합니다.
+3. 현재 프로젝트의 `extension` 폴더를 선택합니다.
 4. **같은 브라우저**에서 `http://127.0.0.1:8787`에 접속해 로그인하고 페이지를 새로고침합니다.
 5. 대시보드 또는 가져오기 화면의 **지금 수집하고 저장**을 누릅니다.
 

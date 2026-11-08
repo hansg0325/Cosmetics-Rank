@@ -12,7 +12,7 @@ if (
     if (
       event.isTrusted &&
       event.target instanceof Element &&
-      event.target.closest('button[data-oliverank-collect="true"]')
+      event.target.closest('button[data-cosmetics-rank-collect="true"]')
     )
       armedUntil = Date.now() + 3000;
   });
@@ -21,14 +21,14 @@ if (
     const m = event.data;
     if (
       !m ||
-      m.channel !== "OLIVERANK_APP_V1" ||
+      m.channel !== "COSMETICS_RANK_APP_V1" ||
       typeof m.id !== "string" ||
       !/^[\da-f-]{36}$/.test(m.id)
     )
       return;
     if (m.type === "PING") {
       window.postMessage(
-        { channel: "OLIVERANK_EXTENSION_V1", type: "PONG", id: m.id },
+        { channel: "COSMETICS_RANK_EXTENSION_V1", type: "PONG", id: m.id },
         location.origin,
       );
       return;
@@ -42,7 +42,7 @@ if (
       });
       window.postMessage(
         {
-          channel: "OLIVERANK_EXTENSION_V1",
+          channel: "COSMETICS_RANK_EXTENSION_V1",
           type: "RESULT",
           id: m.id,
           ...result,
@@ -52,7 +52,7 @@ if (
     } catch {
       window.postMessage(
         {
-          channel: "OLIVERANK_EXTENSION_V1",
+          channel: "COSMETICS_RANK_EXTENSION_V1",
           type: "RESULT",
           id: m.id,
           error:

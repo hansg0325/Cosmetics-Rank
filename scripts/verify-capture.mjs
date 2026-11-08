@@ -6,13 +6,13 @@ if (!file)
     "사용법: bash ./pnpmw verify:capture data/oliveyoung-overall-YYYY-MM-DD.json",
   );
 const capture = JSON.parse(readFileSync(file, "utf8"));
-if (capture.format !== "oliverank-browser-v1" || capture.rows.length !== 100)
+if (capture.format !== "cosmetics-rank-browser-v1" || capture.rows.length !== 100)
   throw Error("캡처 형식 오류");
 const token = readFileSync(".dev.vars", "utf8")
   .match(/^LOCAL_DEV_TOKEN=(.*)$/m)?.[1]
   .trim();
 const headers = { "x-local-token": token };
-const origin = `http://127.0.0.1:${process.env.OLIVERANK_PORT || 8787}`;
+const origin = `http://127.0.0.1:${process.env.COSMETICS_RANK_PORT || 8787}`;
 const response = await fetch(
   `${origin}/api/rankings?date=${encodeURIComponent(capture.ranking_date)}&category=${encodeURIComponent(capture.category_code)}`,
   { headers },

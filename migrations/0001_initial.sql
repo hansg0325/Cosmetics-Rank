@@ -1,4 +1,4 @@
--- OliveRank D1 SQLite schema v2.0
+-- cosmetics rank D1 SQLite schema v2.0
 -- Date/time: YYYY-MM-DD for ranking_date (Asia/Seoul), ISO 8601 UTC for *_at.
 -- Caution: Access control is enforced by Cloudflare Access and API middleware.
 PRAGMA foreign_keys = ON;

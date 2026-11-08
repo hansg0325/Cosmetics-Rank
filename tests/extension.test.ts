@@ -62,7 +62,7 @@ describe("확장 프로그램 수집 제어", () => {
       clearTimeout,
     });
     expect(result.rows).toHaveLength(100);
-    expect(result.format).toBe("oliverank-browser-v1");
+    expect(result.format).toBe("cosmetics-rank-browser-v1");
     expect(JSON.stringify(result)).not.toMatch(
       /image_url|list_price|sale_price/,
     );
@@ -188,7 +188,7 @@ describe("앱 연결 메시지", () => {
           source: {},
           origin: local,
           data: {
-            channel: "OLIVERANK_EXTENSION_V1",
+            channel: "COSMETICS_RANK_EXTENSION_V1",
             type: "RESULT",
             id: message.id,
             capture: "bad",
@@ -198,7 +198,7 @@ describe("앱 연결 메시지", () => {
           source: win,
           origin: "https://evil.example",
           data: {
-            channel: "OLIVERANK_EXTENSION_V1",
+            channel: "COSMETICS_RANK_EXTENSION_V1",
             type: "RESULT",
             id: message.id,
             capture: "bad",
@@ -208,7 +208,7 @@ describe("앱 연결 메시지", () => {
           source: win,
           origin: local,
           data: {
-            channel: "OLIVERANK_EXTENSION_V1",
+            channel: "COSMETICS_RANK_EXTENSION_V1",
             type: message.type === "PING" ? "PONG" : "RESULT",
             id: message.id,
             capture: { rows: 100 },
@@ -266,7 +266,7 @@ describe("앱 연결 메시지", () => {
       source: win,
       origin: local,
       data: {
-        channel: "OLIVERANK_APP_V1",
+        channel: "COSMETICS_RANK_APP_V1",
         type: "COLLECT",
         id: "11111111-1111-1111-1111-111111111111",
       },

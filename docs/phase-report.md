@@ -18,7 +18,7 @@ React/Vite SPA, 한국어 반응형 화면, Hono Worker, 단일 Wrangler Static 
 
 제공 스키마 원본 적용, 22개 카테고리 seed, 제공된 2일×100행 CSV 보존, CSV/XLSX 브라우저 파싱과 미리보기, 날짜·순위·상품·URL·가격 검증, 20행 청크 업로드, 실행 취소/실패 기록, 완료 검증, 명시적 새 버전 교체, 이전 버전 보존, 동일 재업로드 및 청크 재전송 멱등성을 구현했습니다. 미완성 스냅샷은 검증용 랭킹 조회에서 제외합니다.
 
-마이그레이션 명령: `pnpm exec wrangler d1 migrations apply olive-rank --local`. 실제 Wrangler에서 두 파일 모두 적용 성공을 확인했습니다. 원본 스키마는 수정하지 않았습니다.
+마이그레이션 명령: `pnpm exec wrangler d1 migrations apply cosmetics-rank --local`. 실제 Wrangler에서 두 파일 모두 적용 성공을 확인했습니다. 원본 스키마는 수정하지 않았습니다.
 
 테스트: `pnpm test`의 27개 테스트 통과. CSV/XLSX 한글·가격·URL·열 매핑, null/0, 잘못된 날짜/ID/URL/범위, 중복/누락 순위와 상품 ID, 수식 셀 거부/중화 헬퍼, 인증 차단, Origin 검증, 부분 저장 비공개, 청크 재전송, 충돌 롤백, 2일 전체 저장, 중복 업로드, 교체 확인, 취소, 이전 버전 보존을 검증했습니다. 초기 테스트는 SQL 테스트 로더가 트리거를 잘못 분리해 실패했고 수정했습니다. 이후 Windows Miniflare RPC 지연으로 기본 5초 제한을 초과해 30초로 조정했으며 재실행은 통과했습니다.
 

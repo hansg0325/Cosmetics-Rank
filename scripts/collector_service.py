@@ -29,7 +29,7 @@ def validate_capture(capture):
     if set(capture) != {"format", "source_url", "collected_at", "ranking_date", "category_code", "rows"}:
         raise ValueError("수집 데이터 형식이 잘못됐습니다.")
     category = capture["category_code"]
-    if category not in CATEGORIES or capture["format"] != "oliverank-browser-v1" or capture["source_url"] != CATEGORIES[category]["source_url"]:
+    if category not in CATEGORIES or capture["format"] != "cosmetics-rank-browser-v1" or capture["source_url"] != CATEGORIES[category]["source_url"]:
         raise ValueError("랭킹 출처와 카테고리를 확인할 수 없습니다.")
     at = datetime.fromisoformat(capture["collected_at"].replace("Z", "+00:00"))
     if at.utcoffset() != timedelta(0) or at.astimezone(timezone(timedelta(hours=9))).date().isoformat() != capture["ranking_date"]:
@@ -98,10 +98,10 @@ class SeleniumRunner:
             capture = None
             message = None
             for line in stdout.splitlines():
-                if line.startswith("OLIVERANK_CAPTURE "):
-                    capture = json.loads(line.removeprefix("OLIVERANK_CAPTURE "))
-                if line.startswith("OLIVERANK_ERROR "):
-                    message = json.loads(line.removeprefix("OLIVERANK_ERROR ")).get("message")
+                if line.startswith("COSMETICS_RANK_CAPTURE "):
+                    capture = json.loads(line.removeprefix("COSMETICS_RANK_CAPTURE "))
+                if line.startswith("COSMETICS_RANK_ERROR "):
+                    message = json.loads(line.removeprefix("COSMETICS_RANK_ERROR ")).get("message")
             if process.returncode != 0 or capture is None:
                 raise RuntimeError(message or "Selenium 실행에 실패했습니다. Chrome 설치와 접속 상태를 확인하세요.")
             return capture
@@ -194,7 +194,7 @@ def handler_for(jobs, token):
                 return
             path = urlsplit(self.path).path
             if path == "/health":
-                self.send_json(200, {"service": "oliverank-selenium", "protocol": 1})
+                self.send_json(200, {"service": "cosmetics-rank-selenium", "protocol": 1})
             elif re.fullmatch(r"/jobs/[0-9a-f-]{36}", path):
                 job = jobs.get(path.split("/")[-1])
                 self.send_json(200 if job else 404, job or {"error": "NOT_FOUND"})
@@ -254,7 +254,7 @@ def main():
     runner = SeleniumRunner()
     server = ThreadingHTTPServer(("127.0.0.1", args.port), handler_for(Jobs(runner), token))
     server.daemon_threads = True
-    print(f"OliveRank Selenium ready on 127.0.0.1:{args.port}", flush=True)
+    print(f"cosmetics rank Selenium ready on 127.0.0.1:{args.port}", flush=True)
     def shutdown(_signum, _frame):
         runner.close()
         raise KeyboardInterrupt()

@@ -42,7 +42,7 @@
 Git Bash에서:
 
 ```bash
-cd "/c/Users/admin/Documents/ChatGPT/Cosmetics Rank"
+cd /c/Users/user/Documents/Codex/2026-11-04/https-github-com-hansg0325-cosmetics-rank/work/Cosmetics-Rank
 bash ./start-local.sh
 ```
 

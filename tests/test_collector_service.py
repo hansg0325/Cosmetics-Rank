@@ -12,7 +12,7 @@ from collector_service import Jobs, handler_for, validate_capture, ThreadingHTTP
 
 
 def fixture():
-    return {"format": "oliverank-browser-v1", "source_url": "https://www.oliveyoung.co.kr/store/main/getBestList.do", "collected_at": "2026-11-04T00:00:00.000Z", "ranking_date": "2026-11-04", "category_code": "overall", "rows": [
+    return {"format": "cosmetics-rank-browser-v1", "source_url": "https://www.oliveyoung.co.kr/store/main/getBestList.do", "collected_at": "2026-11-04T00:00:00.000Z", "ranking_date": "2026-11-04", "category_code": "overall", "rows": [
         {"rank": n, "product_id": f"A{n:012d}", "brand_name": "테스트", "product_name": f"상품 {n}", "product_url": f"https://www.oliveyoung.co.kr/store/goods/getGoodsDetail.do?goodsNo=A{n:012d}"} for n in range(1, 101)]}
 
 
@@ -196,7 +196,7 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(self.request("/health", authorized=False)[0], 401)
         self.assertEqual(self.request("/health", headers={"Origin": "https://evil.example"})[0], 403)
         self.assertEqual(self.request("/health", headers={"Host": "evil.example"})[0], 403)
-        self.assertEqual(self.request("/health")[1]["service"], "oliverank-selenium")
+        self.assertEqual(self.request("/health")[1]["service"], "cosmetics-rank-selenium")
 
     def test_http_job_roundtrip(self):
         status, job = self.request("/jobs", b"{}")

@@ -22,6 +22,6 @@
 - 브라우저에서 CSV/XLSX 다운로드와 CSV 100개 ID 일치, 빈 검색 결과에서 내보내기 비활성화를 확인했습니다.
 - TypeScript/production build/ESLint 통과. Vitest 79개, Python 서비스 14개 통과.
 
-캡처와 검증 파일은 Git에서 제외한 `data/skincare-button-capture.json`에 있습니다. 대조 명령은 `pnpm verify:capture data/skincare-button-capture.json`입니다. 다른 로컬 앱 포트는 `OLIVERANK_PORT`로 지정할 수 있습니다.
+캡처와 검증 파일은 Git에서 제외한 `data/skincare-button-capture.json`에 있습니다. 대조 명령은 `pnpm verify:capture data/skincare-button-capture.json`입니다. 다른 로컬 앱 포트는 `COSMETICS_RANK_PORT`로 지정할 수 있습니다.
 
 검증은 사용자가 실행한 서버를 종료하지 않고 별도 앱 포트 8791에서 수행했습니다. 같은 작업 사본의 로컬 D1에 저장하므로 기본 앱 포트 8787에서도 기록을 조회할 수 있습니다.

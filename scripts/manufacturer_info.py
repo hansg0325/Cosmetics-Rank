@@ -23,7 +23,7 @@ def enrich_product_details(driver, rows):
     from selenium.webdriver.common.by import By
     from selenium.webdriver.support.ui import WebDriverWait
     from selenium.common.exceptions import TimeoutException, ElementClickInterceptedException
-    state_dir = Path(os.environ.get("OLIVERANK_DETAIL_STATE_DIR", ROOT / ".local-browser"))
+    state_dir = Path(os.environ.get("COSMETICS_RANK_DETAIL_STATE_DIR", ROOT / ".local-browser"))
     path = state_dir / "product-detail-cache.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     try:

@@ -55,7 +55,7 @@ export function captureRanking(doc: Document, pageUrl: string, now: string) {
       `전체 1~100위가 필요합니다. 현재 ${rows.length}개입니다. 페이지가 모두 표시된 뒤 실행하세요.`,
     );
   return {
-    format: "oliverank-browser-v1" as const,
+    format: "cosmetics-rank-browser-v1" as const,
     source_url:
       "https://www.oliveyoung.co.kr/store/main/getBestList.do" as const,
     collected_at: now,

@@ -91,7 +91,7 @@ def write_outputs(path, snapshot, products, results):
     found = sum(r["status"] == "FOUND" for r in results)
     counts = Counter(r['status'] for r in results)
     labels = {"FOUND": "성분 원문 확인", "REFERENCE_ONLY": "상세정보 참조/내용 미제공", "NO_INGREDIENT_FIELD": "성분 항목 없음", "FAILED": "확인 실패", "NOT_ATTEMPTED": "접속 제한으로 후속 확인 중단"}
-    lines = ["OliveRank 전체 랭킹 상품 성분 목록", "", f'랭킹 기준 날짜(KST): {snapshot["ranking_date"]}', f'랭킹 스냅샷 ID: {snapshot["snapshot_id"]}', f'파일 생성 시각(KST): {datetime.now(KST).isoformat(timespec="seconds")}', f"대상 상품: {len(products)}개 / 현재 확인: {len(results)}개 / 성분 원문 확인: {found}개", "", "이 파일은 상품정보 제공고시의 성분/원재료 항목을 원문으로 옮긴 자료입니다.", "기획/옵션 상품은 여러 구성품의 성분이 함께 표기될 수 있습니다. 성분 표기를 임의로 합치거나 추정하지 않았습니다.", "상세 이미지에만 있는 정보는 OCR 처리하지 않았습니다. 가격과 이미지는 수집하지 않았습니다.", ""]
+    lines = ["cosmetics rank 전체 랭킹 상품 성분 목록", "", f'랭킹 기준 날짜(KST): {snapshot["ranking_date"]}', f'랭킹 스냅샷 ID: {snapshot["snapshot_id"]}', f'파일 생성 시각(KST): {datetime.now(KST).isoformat(timespec="seconds")}', f"대상 상품: {len(products)}개 / 현재 확인: {len(results)}개 / 성분 원문 확인: {found}개", "", "이 파일은 상품정보 제공고시의 성분/원재료 항목을 원문으로 옮긴 자료입니다.", "기획/옵션 상품은 여러 구성품의 성분이 함께 표기될 수 있습니다. 성분 표기를 임의로 합치거나 추정하지 않았습니다.", "상세 이미지에만 있는 정보는 OCR 처리하지 않았습니다. 가격과 이미지는 수집하지 않았습니다.", ""]
     lines[8:8] = [f"결과: 원문 확인 {found}개 / 상세정보 참조 {counts['REFERENCE_ONLY']}개 / 성분 항목 없음 {counts['NO_INGREDIENT_FIELD']}개 / 확인 실패 {counts['FAILED']}개 / 접속 중단 {counts['NOT_ATTEMPTED']}개", "", "성분란에 일부 성분만 적힌 경우도 사이트 원문 그대로 옮겼습니다. 누락된 성분을 추정하거나 전성분의 완전성을 보증하지 않습니다."]
     for row in results:
         lines.extend(["=" * 88, f'{row["rank"]:03d}위 | {row["brand_name"]} | {row["product_name"]}', f'상품 ID: {row["product_id"]}', f'출처: {row["source_url"]}', f'확인 시각(UTC): {row["checked_at"]}', f'상태: {labels[row["status"]]}'])
@@ -112,7 +112,7 @@ def main():
     parser.add_argument("--output")
     args = parser.parse_args()
     snapshot, products = saved_ranking()
-    path = Path(args.output) if args.output else ROOT / "data/exports" / f'OliveRank_전체랭킹_전성분_{snapshot["ranking_date"]}.txt'
+    path = Path(args.output) if args.output else ROOT / "data/exports" / f'cosmetics-rank_전체랭킹_전성분_{snapshot["ranking_date"]}.txt'
     results = []
     if (args.resume or args.retry_unavailable) and path.with_suffix(".json").exists():
         previous = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))

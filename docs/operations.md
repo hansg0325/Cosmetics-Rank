@@ -9,10 +9,10 @@ README 빠른 시작을 따릅니다. `.dev.vars.example`은 형식 예시이고
 ## 무료 계정 배포 준비 — 이번 작업에서 실행하지 않음
 
 1. Cloudflare Workers Free / D1 Free / Zero Trust Access Free 계정에서 시작합니다. 유료 플랜이나 카드 등록을 요구하는 기능을 추가하지 않습니다.
-2. `pnpm exec wrangler login`으로 계정 로그인, `pnpm exec wrangler d1 create olive-rank`로 DB 생성 후 반환 ID를 `wrangler.jsonc`의 database_id에 설정합니다. 현재 0으로 채운 ID는 로컬 전용 자리표시자입니다.
+2. `pnpm exec wrangler login`으로 계정 로그인, `pnpm exec wrangler d1 create cosmetics-rank`로 DB 생성 후 반환 ID를 `wrangler.jsonc`의 database_id에 설정합니다. 현재 0으로 채운 ID는 로컬 전용 자리표시자입니다.
 3. Cloudflare Workers 대시보드에서 해당 Worker에 Worker-level Cloudflare Access 보호를 설정합니다. 관리자와 조회 사용자 이메일만 허용하고 workers.dev 및 preview 경로까지 보호되는지 확인합니다. 설정 전에 실데이터를 업로드하지 마세요. 계정 UI 흐름상 Worker 생성이 먼저 필요하면 기본 인증 거부 상태로만 빈 Worker를 생성하고 Access를 먼저 설정합니다.
 4. `ACCESS_TEAM`(팀 슬러그), `ACCESS_AUD`(Access application audience), `ALLOWED_EMAIL`(관리자 이메일)을 Worker 환경변수/secret으로 설정합니다. 조회 사용자는 `VIEWER_EMAILS`에 이메일을 쉼표로 구분해 설정합니다(예: `user1@example.com,user2@example.com`). Access 허용 정책에도 같은 이메일을 추가해야 합니다. `VIEWER_EMAILS`가 비어 있으면 관리자만 접속합니다. 로컬 토큰을 원격 secret으로 등록하지 마세요. 현재 기본값은 빈 문자열이므로 원격은 401로 닫힙니다.
-5. `pnpm exec wrangler d1 migrations apply olive-rank --remote`, `pnpm build`, `pnpm exec wrangler deploy`. 실제 URL은 해당 계정에서 생성됩니다. 이번 작업에서는 계정 로그인·원격 DB 생성·배포를 하지 않았습니다.
+5. `pnpm exec wrangler d1 migrations apply cosmetics-rank --remote`, `pnpm build`, `pnpm exec wrangler deploy`. 실제 URL은 해당 계정에서 생성됩니다. 이번 작업에서는 계정 로그인·원격 DB 생성·배포를 하지 않았습니다.
 6. 로그아웃/시크릿 브라우저, 미허용 사용자, 관리자, 조회 사용자, JWT 누락/변조, preview URL, 정적 JS/CSV 직접 URL을 각각 확인합니다. 허용된 이메일만 접근하도록 설정한 후 데이터를 사용합니다. 로컬 mock 테스트는 배포 Access 정책 검증을 대신하지 않습니다.
 
 조회 사용자는 대시보드·랭킹·순위 변동·상품 이력·점유율 분석만 볼 수 있습니다. 수집 이력, 엑셀 내보내기, 키워드 설정, 수집·가져오기 API는 관리자만 사용할 수 있습니다. 로컬 개발 서버는 로그인 없이 관리자 권한으로 동작하므로 외부에 공개하지 마세요.
@@ -25,6 +25,6 @@ Workers 대시보드에서 업로드/완료/JWT 인증 경로의 CPU p50/p95/p99
 
 ## 백업과 데이터 공급
 
-실데이터 변경 전 `pnpm exec wrangler d1 export olive-rank --remote --output=backup.sql`로 로컬 백업합니다. 월 1회 오프라인 백업을 권장하며 backup 파일은 Git에서 제외합니다. D1 Free Time Travel의 보존기간은 [공식 한도](https://developers.cloudflare.com/d1/platform/limits/)에서 확인합니다. 로컬 데이터 복원도 별도 환경에서 검증한 후 원격에 적용하세요.
+실데이터 변경 전 `pnpm exec wrangler d1 export cosmetics-rank --remote --output=backup.sql`로 로컬 백업합니다. 월 1회 오프라인 백업을 권장하며 backup 파일은 Git에서 제외합니다. D1 Free Time Travel의 보존기간은 [공식 한도](https://developers.cloudflare.com/d1/platform/limits/)에서 확인합니다. 로컬 데이터 복원도 별도 환경에서 검증한 후 원격에 적용하세요.
 
 자동 수집 허가는 확인하지 않았습니다. 크롤러, 우회, CAPTCHA 처리, Cron은 없습니다. 현재 상태는 `DISABLED_NO_APPROVED_SOURCE`이며 수동 CSV/XLSX와 가상 샘플만 사용합니다.

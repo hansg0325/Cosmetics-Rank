@@ -209,7 +209,7 @@ describe("버튼 수집 진행 상태 처리", () => {
   });
   it("COMPLETE의 유효한 데이터만 원래 KST 날짜와 함께 반환", async () => {
     const capture = {
-      format: "oliverank-browser-v1",
+      format: "cosmetics-rank-browser-v1",
       source_url: "https://www.oliveyoung.co.kr/store/main/getBestList.do",
       collected_at: "2026-11-04T00:00:00Z",
       ranking_date: "2026-11-04",

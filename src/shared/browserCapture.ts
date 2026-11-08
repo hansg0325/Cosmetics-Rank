@@ -11,7 +11,7 @@ export type CollectionCategory = z.infer<typeof collectionCategorySchema>;
 export { collectionCategories };
 export const browserCaptureSchema = z
   .object({
-    format: z.literal("oliverank-browser-v1"),
+    format: z.literal("cosmetics-rank-browser-v1"),
     source_url: z.string(),
     collected_at: z.string().datetime(),
     ranking_date: day,

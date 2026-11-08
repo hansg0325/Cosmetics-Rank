@@ -33,5 +33,5 @@ def ingredient_keywords(ingredients, rules=None):
         return None
     text = ingredients.casefold()
     if rules is None:
-        rules = json.loads(os.environ["OLIVERANK_KEYWORD_RULES"]) if "OLIVERANK_KEYWORD_RULES" in os.environ else default_rules()
+        rules = json.loads(os.environ["COSMETICS_RANK_KEYWORD_RULES"]) if "COSMETICS_RANK_KEYWORD_RULES" in os.environ else default_rules()
     return [rule["display"] for rule in validate_rules(rules) if any(word.casefold() in text for word in rule["includes"])]

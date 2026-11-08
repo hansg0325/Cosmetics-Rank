@@ -6,9 +6,9 @@ const token = readFileSync(".dev.vars", "utf8").match(
 )?.[1];
 const line = readFileSync("data/category-collection-output.txt", "utf8")
   .split(/\r?\n/)
-  .find((l) => l.startsWith("OLIVERANK_CAPTURE "));
+  .find((l) => l.startsWith("COSMETICS_RANK_CAPTURE "));
 if (!line) throw Error("수집 결과 없음");
-const capture = JSON.parse(line.slice("OLIVERANK_CAPTURE ".length));
+const capture = JSON.parse(line.slice("COSMETICS_RANK_CAPTURE ".length));
 if (
   capture.rows.length !== 100 ||
   capture.rows.some(

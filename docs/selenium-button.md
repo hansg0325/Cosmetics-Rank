@@ -5,7 +5,7 @@
 기존 서버가 실행 중이면 해당 터미널에서 Ctrl+C로 종료하고, Git Bash에서 다음을 실행합니다.
 
 ```bash
-cd "/c/Users/admin/Documents/ChatGPT/Cosmetics Rank"
+cd /c/Users/user/Documents/Codex/2026-11-04/https-github-com-hansg0325-cosmetics-rank/work/Cosmetics-Rank
 bash ./start-local.sh
 ```
 
@@ -13,7 +13,7 @@ bash ./start-local.sh
 
 Node.js/pnpm은 기존 `pnpmw`가, Python은 `scripts/dev.mjs`가 이 PC의 번들 런타임 또는 시스템 설치 경로에서 찾습니다. Selenium 4.52.0은 최초 실행 시 `.local-browser/python-deps`에 설치하며 전역 Python 환경은 변경하지 않습니다. ChromeDriver는 Selenium Manager가 준비합니다. 인터넷 연결과 Chrome 설치가 필요합니다.
 
-다른 PC에서는 `OLIVERANK_PYTHON`, `OLIVERANK_CHROME_BINARY` 환경변수로 실행 파일 경로를 지정할 수 있습니다. 기본 앱 포트는 8787, 내부 수집 서비스는 127.0.0.1:8790입니다. `OLIVERANK_PORT`는 검증용 앱 포트 변경에 사용합니다. 이번 브라우저 검증은 사용자가 실행 중이던 8787 서버를 종료하지 않고 별도의 8791 포트에서 수행했습니다.
+다른 PC에서는 `COSMETICS_RANK_PYTHON`, `COSMETICS_RANK_CHROME_BINARY` 환경변수로 실행 파일 경로를 지정할 수 있습니다. 기본 앱 포트는 8787, 내부 수집 서비스는 127.0.0.1:8790입니다. `COSMETICS_RANK_PORT`는 검증용 앱 포트 변경에 사용합니다. 이번 브라우저 검증은 사용자가 실행 중이던 8787 서버를 종료하지 않고 별도의 8791 포트에서 수행했습니다.
 
 ## 구현 구조
 

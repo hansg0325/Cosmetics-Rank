@@ -1,5 +1,5 @@
 {
-  "name": "olive-rank",
+  "name": "cosmetics-rank",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "db:migrate": "wrangler d1 migrations apply olive-rank --local",
+    "db:migrate": "wrangler d1 migrations apply cosmetics-rank --local",
     "setup:local": "node scripts/local-setup.mjs",
     "test:smoke": "node scripts/smoke.mjs",
     "verify:capture": "node scripts/verify-capture.mjs",

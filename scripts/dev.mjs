@@ -11,7 +11,7 @@ const token = readFileSync(".dev.vars", "utf8")
   .trim();
 if (!token) throw Error("pnpm setup:local을 먼저 실행하세요.");
 const candidates = [
-  process.env.OLIVERANK_PYTHON,
+  process.env.COSMETICS_RANK_PYTHON,
   path.join(
     homedir(),
     ".cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe",
@@ -29,7 +29,7 @@ const python = candidates.find(
 );
 if (!python)
   throw Error(
-    "Python 3.10 이상을 설치하거나 OLIVERANK_PYTHON 경로를 설정하세요.",
+    "Python 3.10 이상을 설치하거나 COSMETICS_RANK_PYTHON 경로를 설정하세요.",
   );
 const packages = path.join(root, ".local-browser", "python-deps");
 mkdirSync(packages, { recursive: true });
@@ -41,12 +41,12 @@ const env = {
   LOCAL_DEV_TOKEN: token,
 };
 const chrome =
-  process.env.OLIVERANK_CHROME_BINARY ||
+  process.env.COSMETICS_RANK_CHROME_BINARY ||
   [
     "C:/Program Files/Google/Chrome/Application/chrome.exe",
     "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
   ].find(existsSync);
-if (chrome) env.OLIVERANK_CHROME_BINARY = chrome;
+if (chrome) env.COSMETICS_RANK_CHROME_BINARY = chrome;
 async function run(command, args) {
   await new Promise((resolve, reject) => {
     const child = spawn(command, args, {
@@ -87,7 +87,7 @@ async function ready() {
       signal: AbortSignal.timeout(1000),
     });
     const d = await r.json();
-    return r.ok && d.service === "oliverank-selenium" && d.protocol === 1;
+    return r.ok && d.service === "cosmetics-rank-selenium" && d.protocol === 1;
   } catch {
     return false;
   }
@@ -163,7 +163,7 @@ try {
         "8790 포트의 수집 서비스를 시작하지 못했습니다. 이미 실행 중인 앱을 확인하세요.",
       );
   } else console.log("이미 실행 중인 로컬 수집 서비스를 사용합니다.");
-  const port = Number(process.env.OLIVERANK_PORT || 8787);
+  const port = Number(process.env.COSMETICS_RANK_PORT || 8787);
   if (!Number.isInteger(port) || port < 1024 || port > 65535)
     throw Error("앱 포트가 잘못됐습니다.");
   worker = spawn(

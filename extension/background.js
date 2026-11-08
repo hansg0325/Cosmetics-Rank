@@ -43,7 +43,7 @@ async function waitForPage(id) {
 }
 export async function collect(sender) {
   if (!allowedSender(sender))
-    throw new Error("허용된 로컬 OliveRank 페이지에서만 실행할 수 있습니다.");
+    throw new Error("허용된 로컬 cosmetics rank 페이지에서만 실행할 수 있습니다.");
   if (collecting) throw new Error("이미 수집 중입니다. 완료 후 다시 누르세요.");
   collecting = true;
   let tab;

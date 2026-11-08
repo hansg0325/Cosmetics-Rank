@@ -5,7 +5,7 @@ function exchange(type: "PING" | "COLLECT", timeout: number): Promise<unknown> {
       if (
         event.source !== window ||
         event.origin !== location.origin ||
-        event.data?.channel !== "OLIVERANK_EXTENSION_V1" ||
+        event.data?.channel !== "COSMETICS_RANK_EXTENSION_V1" ||
         event.data.id !== id ||
         event.data.type !== (type === "PING" ? "PONG" : "RESULT")
       )
@@ -30,7 +30,7 @@ function exchange(type: "PING" | "COLLECT", timeout: number): Promise<unknown> {
     }
     window.addEventListener("message", handler);
     window.postMessage(
-      { channel: "OLIVERANK_APP_V1", type, id },
+      { channel: "COSMETICS_RANK_APP_V1", type, id },
       location.origin,
     );
   });

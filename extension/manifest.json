@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "OliveRank 브라우저 연결",
+  "name": "cosmetics rank 브라우저 연결",
   "version": "0.1.0",
-  "description": "OliveRank의 수집 버튼을 누를 때만 전체 랭킹 100개를 읽습니다. 가격과 이미지는 제외합니다.",
+  "description": "cosmetics rank의 수집 버튼을 누를 때만 전체 랭킹 100개를 읽습니다. 가격과 이미지는 제외합니다.",
   "permissions": ["scripting"],
   "host_permissions": ["https://www.oliveyoung.co.kr/*"],
   "background": { "service_worker": "background.js", "type": "module" },

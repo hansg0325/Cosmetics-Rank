@@ -38,8 +38,8 @@
 PowerShell에서 프로젝트 폴더를 열고 실행합니다. 테스트용 패키지는 프로젝트·앱의 Python 환경과 분리된 임시 폴더에 설치합니다.
 
 ```powershell
-& 'C:\Users\admin\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' -m pip install --target "$env:TEMP\oliverank-selenium-test" -r scripts/requirements-selenium.txt
-$env:PYTHONPATH = Join-Path $env:TEMP 'oliverank-selenium-test'
+& 'C:\Users\admin\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' -m pip install --target "$env:TEMP\cosmetics-rank-selenium-test" -r scripts/requirements-selenium.txt
+$env:PYTHONPATH = Join-Path $env:TEMP 'cosmetics-rank-selenium-test'
 & 'C:\Users\admin\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe' -u -X utf8 scripts/probe-selenium.py --chrome-binary 'C:\Program Files\Google\Chrome\Application\chrome.exe'
 ```
 
