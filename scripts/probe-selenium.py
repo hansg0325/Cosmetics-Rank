@@ -1,8 +1,7 @@
-"""Diagnostic only: two public pages, no DB writes, prices, images or reviews.
+"""Collect public ranking and product details with Selenium.
 
-Reproduces the supplied crawler's --headless, --no-sandbox, old User-Agent
-and 10-second wait. Uses Selenium Manager for driver provisioning instead
-of webdriver_manager. No CAPTCHA interaction or retries are performed.
+Uses Chrome's native User-Agent rather than overriding it with a stale value.
+No CAPTCHA interaction or retries are performed.
 """
 
 import argparse
@@ -20,11 +19,6 @@ from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 
-USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/58.0.3029.110 Safari/537.3"
-)
 RANKING_TO_DETAILS_DELAY_SECONDS = 10
 BASE = "https://www.oliveyoung.co.kr"
 TARGETS = [
@@ -160,7 +154,6 @@ def probe(kind, source, chrome_binary, category_code=None, category_name=None):
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
     options.page_load_strategy = "eager"
-    options.add_argument(f"user-agent={USER_AGENT}")
     options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
     if chrome_binary:
         options.binary_location = chrome_binary
