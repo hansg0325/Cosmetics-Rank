@@ -101,7 +101,22 @@ class SeleniumRunner:
                 if line.startswith("COSMETICS_RANK_CAPTURE "):
                     capture = json.loads(line.removeprefix("COSMETICS_RANK_CAPTURE "))
                 if line.startswith("COSMETICS_RANK_ERROR "):
-                    message = json.loads(line.removeprefix("COSMETICS_RANK_ERROR ")).get("message")
+                    diagnostic = json.loads(line.removeprefix("COSMETICS_RANK_ERROR "))
+                    response = diagnostic.get("document_response") or {}
+                    message = (
+                        f'{diagnostic.get("message", "랭킹 수집에 실패했습니다.")} '
+                        f'[{diagnostic.get("request_type", "unknown")}; '
+                        f'category={diagnostic.get("category_code", category)}; '
+                        f'stage={diagnostic.get("stage", "unknown")}; '
+                        f'HTTP={response.get("status", "unknown")}; '
+                        f'title={diagnostic.get("page_title", "empty")}; '
+                        f'excerpt={diagnostic.get("page_excerpt", "empty")}; '
+                        f'URL={diagnostic.get("final_url", "unknown")}; '
+                        f'user_agent={diagnostic.get("effective_user_agent", "unknown")}; '
+                        f'navigation_timed_out={diagnostic.get("navigation_timed_out", False)}; '
+                        f'error={diagnostic.get("error_type", "none")}: '
+                        f'{diagnostic.get("error", "none")}]'
+                    )
             if process.returncode != 0 or capture is None:
                 raise RuntimeError(message or "Selenium 실행에 실패했습니다. Chrome 설치와 접속 상태를 확인하세요.")
             return capture
