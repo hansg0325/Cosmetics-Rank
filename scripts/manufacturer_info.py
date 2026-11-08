@@ -23,7 +23,6 @@ def enrich_product_details(driver, rows):
     """One native page visit per uncached product; extract all fields from its DOM."""
     from selenium.webdriver.common.by import By
     from selenium.webdriver.support.ui import WebDriverWait
-    from selenium.common.exceptions import TimeoutException, ElementClickInterceptedException
     state_dir = Path(os.environ.get("COSMETICS_RANK_DETAIL_STATE_DIR", ROOT / ".local-browser"))
     path = state_dir / "product-detail-cache.json"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -64,11 +63,6 @@ def enrich_product_details(driver, rows):
                     return d.execute_script(script, product_id, row["product_name"])
                 # Wait for the main product header and its asynchronously rendered summary.
                 result = WebDriverWait(driver, 12).until(read)
-                if result["review_status"] == "NOT_RENDERED":
-                    try:
-                        result = WebDriverWait(driver, 6).until(lambda d: (value if (value := read(d)) and value["review_status"] != "NOT_RENDERED" else False))
-                    except TimeoutException:
-                        pass
                 # Opening the disclosure never reloads the product page.
                 buttons = driver.find_elements(By.XPATH, "//button[normalize-space(.)='상품정보 제공고시']") or driver.find_elements(By.CSS_SELECTOR, "#detailInfo a")
                 if buttons:
@@ -76,12 +70,7 @@ def enrich_product_details(driver, rows):
                     try:
                         driver.execute_script("arguments[0].scrollIntoView({block:'center'});", button)
                         if button.get_attribute("aria-expanded") != "true":
-                            try:
-                                button.click()
-                            except ElementClickInterceptedException:
-                                driver.execute_script("arguments[0].scrollIntoView({block:'center'});", button)
-                                time.sleep(0.6)
-                                button.click()
+                            button.click()
                         expanded = WebDriverWait(driver, 8).until(lambda d: (value if (value := read(d)) and value["disclosure_checked"] else False))
                         # A disclosure rendering failure must not discard the review summary.
                         if result["review_status"] == "FOUND" and expanded["review_status"] != "FOUND":
