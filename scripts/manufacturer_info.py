@@ -7,7 +7,7 @@ from urllib.parse import urlsplit, parse_qs
 from ingredient_keywords import ingredient_keywords
 
 ROOT = Path(__file__).resolve().parent.parent
-DETAIL_INTERVAL_SECONDS = 2
+DETAIL_INTERVAL_SECONDS = 3
 DETAIL_TIME_BUDGET_SECONDS = 3600
 
 

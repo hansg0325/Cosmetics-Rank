@@ -4,12 +4,14 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 from urllib.error import HTTPError
 
 ROOT = Path(__file__).resolve().parent.parent
 ORIGIN = os.environ["COLLECTION_ORIGIN"].rstrip("/")
+CATEGORY_INTERVAL_SECONDS = 3
 if not ORIGIN.startswith("https://"):
     raise ValueError("HTTPS collection origin required")
 class NoRedirect(HTTPRedirectHandler):
@@ -78,7 +80,8 @@ def main():
     rules = request("settings/keywords")
     categories = json.loads((ROOT / "src/shared/collectionCategories.json").read_text())
     failures = []
-    for category in categories:
+    category_codes = list(categories)
+    for category_index, category in enumerate(category_codes):
         run_id = None
         try:
             result = subprocess.run([sys.executable, "scripts/collect-rankings.py", "--category", category],
@@ -119,6 +122,9 @@ def main():
                     pass
             print(f"{category}: failed ({type(error).__name__}): {error}", flush=True)
             failures.append(category)
+        if category_index < len(category_codes) - 1:
+            print(f"Waiting {CATEGORY_INTERVAL_SECONDS}s before the next category", flush=True)
+            time.sleep(CATEGORY_INTERVAL_SECONDS)
     if failures:
         raise SystemExit("Failed categories: " + ", ".join(failures))
 
