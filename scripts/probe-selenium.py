@@ -155,7 +155,7 @@ def extract(driver, kind, source):
     return {"valid": valid, "product_count": len(rows), "products": rows}
 
 
-def probe(kind, source, chrome_binary):
+def probe(kind, source, chrome_binary, category_code=None, category_name=None):
     options = webdriver.ChromeOptions()
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
@@ -173,6 +173,9 @@ def probe(kind, source, chrome_binary):
         # Unlike the reference, apply timeout BEFORE get().
         driver.set_page_load_timeout(30)
         stage = "ranking_navigation"
+        emit({"stage": "category_list_request_started", "request_type": "category_ranking_list",
+              "category_code": category_code, "category_name": category_name,
+              "requested_url": source})
         try:
             driver.get(source)
         except TimeoutException:
@@ -196,12 +199,21 @@ def probe(kind, source, chrome_binary):
                 pass
         stage = "final_rank_validation"
         result = extract(driver, kind, source)
+        diagnostic = page_diagnostic(driver, source, stage, navigation_timed_out)
+        emit({"stage": "category_list_result", "request_type": "category_ranking_list",
+              "category_code": category_code, "category_name": category_name,
+              "valid": result["valid"], "product_count": result["product_count"],
+              "category_matches": result.get("category_matches"),
+              "requested_url": source, "final_url": diagnostic["final_url"],
+              "document_response": diagnostic["document_response"],
+              "page_title": diagnostic["page_title"],
+              "navigation_timed_out": navigation_timed_out})
         if not result["valid"]:
-            result.update(page_diagnostic(driver, source, stage, navigation_timed_out))
+            result.update(diagnostic)
         if kind == "overall" and result["valid"]:
             stage = "product_detail_enrichment"
             time.sleep(RANKING_TO_DETAILS_DELAY_SECONDS)
-            enrich_product_details(driver, result["products"])
+            enrich_product_details(driver, result["products"], category_code=category_code)
         if kind == "product" and not result["valid"]:
             result["selector_diagnostics"] = driver.execute_script("""
               const expected=document.title.replace(/\\s*\\|\\s*올리브영.*$/,'').trim();
@@ -212,6 +224,7 @@ def probe(kind, source, chrome_binary):
             """)
         return {"target": kind, "source_url": source, "final_url": driver.current_url,
                 "title": driver.title, "elapsed_seconds": round(time.monotonic()-started, 1),
+                "category_code": category_code, "category_name": category_name,
                 "browser_version": driver.capabilities.get("browserVersion"),
                 "effective_user_agent": driver.execute_script("return navigator.userAgent"),
                 **result}
@@ -236,7 +249,9 @@ def main():
         if args.target != "both" and args.target != kind:
             continue
         emit({"stage": "starting", "target": kind, "source_url": source})
-        result = probe(kind, source, args.chrome_binary)
+        result = probe(kind, source, args.chrome_binary,
+                       category_code="overall" if kind == "overall" else None,
+                       category_name="전체랭킹" if kind == "overall" else None)
         results.append(result)
         emit({"stage": "result", **{k:v for k,v in result.items() if k != "products"},
               "sample_products": result.get("products", [])[:3]})

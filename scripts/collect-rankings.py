@@ -20,10 +20,14 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--category", choices=list(categories), default="overall")
 category = parser.parse_args().category
 source = categories[category]["source_url"]
-result = module.probe("overall", source, os.environ.get("COSMETICS_RANK_CHROME_BINARY"))
+result = module.probe("overall", source, os.environ.get("COSMETICS_RANK_CHROME_BINARY"),
+                      category_code=category, category_name=categories[category]["name"])
 if not result.get("valid"):
     print("COSMETICS_RANK_ERROR " + json.dumps({
         "message": categories[category]["name"] + " 랭킹 100개 또는 선택된 카테고리를 확인하지 못했습니다.",
+        "request_type": "category_ranking_list",
+        "category_code": category,
+        "category_name": categories[category]["name"],
         "page_title": result.get("page_title", result.get("title", "")),
         "product_count": result.get("product_count", 0),
         "category_matches": result.get("category_matches"),

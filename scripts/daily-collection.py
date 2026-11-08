@@ -88,15 +88,25 @@ def main():
     for category_index, category in enumerate(category_codes):
         run_id = None
         try:
-            result = subprocess.run([sys.executable, "scripts/collect-rankings.py", "--category", category],
+            result = subprocess.run([sys.executable, "-u", "scripts/collect-rankings.py", "--category", category],
                 input=json.dumps(rules), text=True, encoding="utf-8", capture_output=True, cwd=ROOT, timeout=7200)
+            # Surface the child collector's structured request/progress logs in Actions,
+            # while keeping the large ranking payload marker out of the job log.
+            for line in result.stdout.splitlines():
+                if not line.startswith("COSMETICS_RANK_CAPTURE "):
+                    print(f"[{category}] {line}", flush=True)
             if result.returncode:
+                for line in result.stderr.splitlines():
+                    print(f"[{category}] stderr: {line}", flush=True)
                 error_line = next((line for line in result.stdout.splitlines()
                                    if line.startswith("COSMETICS_RANK_ERROR ")), "")
                 if error_line:
                     diagnostic = json.loads(error_line.split(" ", 1)[1])
                     raise RuntimeError(
                         "Browser collection failed; no snapshot published; "
+                        f"request_type={diagnostic.get('request_type') or 'category_ranking_list'}; "
+                        f"category_code={diagnostic.get('category_code') or category}; "
+                        f"category_name={diagnostic.get('category_name') or categories[category]['name']}; "
                         f"stage={diagnostic.get('stage') or 'unknown'}; "
                         f"requested_url={diagnostic.get('requested_url') or 'unknown'}; "
                         f"final_url={diagnostic.get('final_url') or 'unknown'}; "

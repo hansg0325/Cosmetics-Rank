@@ -12,6 +12,29 @@ DETAIL_TIME_BUDGET_SECONDS = 3600
 DETAIL_CACHE_TTL_SECONDS = 3600
 
 
+def document_response(driver, expected_url):
+    """Return the main document status for a detail URL from Chrome performance logs."""
+    expected = urlsplit(expected_url)
+    matches = []
+    try:
+        entries = driver.get_log("performance")
+    except Exception:
+        return None
+    for entry in entries:
+        try:
+            message = json.loads(entry["message"])["message"]
+            if message.get("method") != "Network.responseReceived":
+                continue
+            params = message.get("params", {})
+            response = params.get("response", {})
+            parsed = urlsplit(response.get("url", ""))
+            if params.get("type") == "Document" and parsed.netloc == expected.netloc and parsed.path == expected.path:
+                matches.append({"status": response.get("status"), "url": response.get("url")})
+        except (KeyError, TypeError, ValueError):
+            continue
+    return matches[-1] if matches else None
+
+
 def split_manufacturer_seller(text):
     if not isinstance(text, str) or "/" not in text:
         return None, None
@@ -19,7 +42,7 @@ def split_manufacturer_seller(text):
     return manufacturer.strip() or None, seller.strip() or None
 
 
-def enrich_product_details(driver, rows):
+def enrich_product_details(driver, rows, category_code=None):
     """One native page visit per uncached product; extract all fields from its DOM."""
     from selenium.webdriver.common.by import By
     from selenium.webdriver.support.ui import WebDriverWait
@@ -45,6 +68,13 @@ def enrich_product_details(driver, rows):
     for index, row in enumerate(rows):
         product_id = row["product_id"]
         cached = cache.get(product_id)
+        requested = False
+        detail_page_title = ""
+        detail_error_type = None
+        detail_error = None
+        detail_response = None
+        detail_final_url = None
+        detail_page_excerpt = None
         status = "CACHE" if cached else "SKIPPED_ACCESS_LIMIT" if blocked else "SKIPPED_ERRORS"
         if time.monotonic() - started > DETAIL_TIME_BUDGET_SECONDS and not cached:
             status = "SKIPPED_TIME_BUDGET"
@@ -55,7 +85,15 @@ def enrich_product_details(driver, rows):
                     time.sleep(remaining)
             result = None
             try:
+                requested = True
+                print(json.dumps({"stage": "product_detail_request_started",
+                    "request_type": "product_detail",
+                    "category_code": category_code, "index": index + 1, "total": len(rows),
+                    "product_id": product_id, "url": row["product_url"]}), flush=True)
                 driver.get(row["product_url"])
+                detail_response = document_response(driver, row["product_url"])
+                detail_final_url = driver.current_url
+                detail_page_title = driver.title
                 actual = urlsplit(driver.current_url)
                 if actual.netloc != "www.oliveyoung.co.kr" or actual.path != "/store/goods/getGoodsDetail.do" or parse_qs(actual.query).get("goodsNo") != [product_id]:
                     raise ValueError("상품 출처 불일치")
@@ -84,8 +122,18 @@ def enrich_product_details(driver, rows):
                 consecutive_errors = 0
             except Exception as error:
                 consecutive_errors += 1
-                title = driver.title.lower()
-                body = driver.execute_script("return document.body?.innerText?.slice(0,1000) || ''").lower()
+                detail_error_type = type(error).__name__
+                detail_error = str(error)[:500]
+                try:
+                    detail_page_title = driver.title
+                    detail_final_url = driver.current_url
+                    body = driver.execute_script("return document.body?.innerText?.slice(0,600) || ''")
+                    detail_response = document_response(driver, row["product_url"])
+                except Exception:
+                    body = ""
+                detail_page_excerpt = " ".join(body.split())[:600] or None
+                title = detail_page_title.lower()
+                body = body.lower()
                 blocked = any(word in title for word in ("moment", "기다", "접속", "too many", "429", "access denied")) or any(word in body for word in ("서비스 이용이 제한", "비정상적인 접근", "접근이 차단", "too many requests", "access denied", "just a moment", "captcha"))
                 status = "ACCESS_LIMIT" if blocked else type(error).__name__
                 if blocked:
@@ -105,6 +153,23 @@ def enrich_product_details(driver, rows):
             "review_status": cached.get("review_status") if cached else "NOT_COLLECTED",
             "review_count": row["review_count"], "rating": row["rating"]})
         progress = {"stage": "product_details", "done": index + 1, "total": len(rows),
+            "category_code": category_code,
+            "product_id": product_id,
+            "product_url": row["product_url"],
+            "request_action": "REQUESTED" if requested else "CACHE_HIT" if cached else status,
+            "status": status,
+            "page_title": detail_page_title or None,
+            "page_excerpt": detail_page_excerpt,
+            "detail_final_url": detail_final_url,
+            "document_response": detail_response,
+            "error_type": detail_error_type,
+            "error": detail_error,
+            "manufacturer_found": row.get("manufacturer_name") is not None,
+            "seller_found": row.get("seller_name") is not None,
+            "ingredients_found": row.get("keywords") is not None,
+            "review_status": cached.get("review_status") if cached else "NOT_COLLECTED",
+            "review_count_found": row.get("review_count") is not None,
+            "rating_found": row.get("rating") is not None,
             "manufacturer": sum(item.get("manufacturer_name") is not None for item in rows[:index + 1]),
             "ingredients": sum(item.get("keywords") is not None for item in rows[:index + 1]),
             "reviews": sum(item.get("review_count") is not None for item in rows[:index + 1]),
