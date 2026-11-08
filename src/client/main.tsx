@@ -51,6 +51,9 @@ async function api<T = unknown>(path: string, body?: unknown): Promise<T> {
   return data as T;
 }
 function App() {
+  const localApp = ["localhost", "127.0.0.1", "[::1]"].includes(
+    window.location.hostname,
+  );
   const collectionLock = useRef(false);
   const [role, setRole] = useState<"admin" | "viewer" | null>(null);
   const [productId, setProductId] = useState<string | null>(null),
@@ -60,6 +63,8 @@ function App() {
     [busy, setBusy] = useState(false),
     [runs, setRuns] = useState<Run[]>([]),
     [runPage, setRunPage] = useState(0),
+    [localCollectionCategory, setLocalCollectionCategory] =
+      useState<CollectionCategory>("skincare"),
     [runsLoading, setRunsLoading] = useState(false),
     [hasNextRuns, setHasNextRuns] = useState(false),
     [categories, setCategories] = useState<
@@ -153,15 +158,17 @@ function App() {
   async function collectNow() {
     if (busy || collectionLock.current) return;
     collectionLock.current = true;
-    if (!["localhost", "127.0.0.1", "[::1]"].includes(window.location.hostname)) {
+    if (!localApp) {
       window.open("https://github.com/hansg0325/Cosmetics-Rank/actions/workflows/daily-collection.yml", "_blank", "noopener,noreferrer");
       setMessage("GitHub Actions에서 Run workflow를 눌러 수집을 시작하세요.");
       return;
     }
     setBusy(true);
-    setMessage("전체 카테고리 랭킹을 불러오는 중…");
+    setMessage(
+      `${collectionCategories[localCollectionCategory].name} 랭킹을 불러오는 중…`,
+    );
     try {
-      const targets = Object.keys(collectionCategories) as CollectionCategory[];
+      const targets = [localCollectionCategory];
       const failed: string[] = [];
       let completed = 0;
       const coverage = {
@@ -280,6 +287,29 @@ function App() {
         {role === "admin" && page === "관리자" && (
           <article>
             <h2>랭킹 데이터 수집</h2>
+            {localApp && (
+              <label className="local-collection-category">
+                수집 카테고리
+                <select
+                  value={localCollectionCategory}
+                  disabled={busy}
+                  onChange={(event) =>
+                    setLocalCollectionCategory(
+                      event.target.value as CollectionCategory,
+                    )
+                  }
+                >
+                  {Object.entries(collectionCategories).map(([code, item]) => (
+                    <option key={code} value={code}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {localApp && (
+              <p>이 PC의 로컬 DB에 선택한 카테고리만 저장합니다.</p>
+            )}
             <button
               className="primary"
               disabled={busy}
