@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+CACHE_TTL_SECONDS = 3600
 
 
 def valid_summary(row):
@@ -22,7 +23,7 @@ def enrich_reviews(driver, rows):
     except (OSError, ValueError):
         cache = {}
     now = time.time()
-    cache = {key: value for key, value in cache.items() if isinstance(value, dict) and valid_summary(value) and 0 <= now - value.get("checked_at", 0) < 900}
+    cache = {key: value for key, value in cache.items() if isinstance(value, dict) and valid_summary(value) and 0 <= now - value.get("checked_at", 0) < CACHE_TTL_SECONDS}
     missing = [row["product_id"] for row in rows if row["product_id"] not in cache]
     cooldown_file = ROOT / ".local-browser/review-cooldown.json"
     try:

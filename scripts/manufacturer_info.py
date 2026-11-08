@@ -9,6 +9,7 @@ from ingredient_keywords import ingredient_keywords
 ROOT = Path(__file__).resolve().parent.parent
 DETAIL_INTERVAL_SECONDS = 3
 DETAIL_TIME_BUDGET_SECONDS = 3600
+DETAIL_CACHE_TTL_SECONDS = 3600
 
 
 def split_manufacturer_seller(text):
@@ -30,7 +31,7 @@ def enrich_product_details(driver, rows):
         cache = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         cache = {}
-    cache = {key: value for key, value in cache.items() if isinstance(value, dict) and value.get("version") == 1 and 0 <= time.time() - value.get("checked_at", 0) < 900}
+    cache = {key: value for key, value in cache.items() if isinstance(value, dict) and value.get("version") == 1 and 0 <= time.time() - value.get("checked_at", 0) < DETAIL_CACHE_TTL_SECONDS}
     script = (ROOT / "scripts/product_details.js").read_text(encoding="utf-8")
     cooldown = path.parent / "product-detail-cooldown.json"
     blocked = False
