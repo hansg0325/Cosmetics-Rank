@@ -12,6 +12,7 @@ from urllib.error import HTTPError
 ROOT = Path(__file__).resolve().parent.parent
 ORIGIN = os.environ["COLLECTION_ORIGIN"].rstrip("/")
 CATEGORY_INTERVAL_SECONDS = 3
+ACCESS_ACCEPTANCE_LOGGED = False
 if not ORIGIN.startswith("https://"):
     raise ValueError("HTTPS collection origin required")
 class NoRedirect(HTTPRedirectHandler):
@@ -31,12 +32,15 @@ HEADERS = {
 }
 
 def request(path, body=None):
+    global ACCESS_ACCEPTANCE_LOGGED
     data = json.dumps(body).encode() if body is not None else None
     try:
         with OPENER.open(Request(ORIGIN + "/api/" + path, data=data, headers=HEADERS), timeout=90) as response:
             if "application/json" not in response.headers.get("Content-Type", ""):
                 raise RuntimeError("API returned a login page instead of JSON; check the Access Service Auth policy")
-            print("Cloudflare Access credential pair: ACCEPTED (request reached Worker)", flush=True)
+            if not ACCESS_ACCEPTANCE_LOGGED:
+                print("Cloudflare Access credential pair: ACCEPTED (request reached Worker)", flush=True)
+                ACCESS_ACCEPTANCE_LOGGED = True
             return json.load(response)
     except HTTPError as error:
         content_type = error.headers.get("Content-Type", "unknown")
