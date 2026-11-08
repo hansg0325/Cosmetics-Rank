@@ -34,13 +34,19 @@ def request(path, body=None):
             print("Cloudflare Access credential pair: ACCEPTED (request reached Worker)", flush=True)
             return json.load(response)
     except HTTPError as error:
-        content_type = error.headers.get("Content-Type", "")
+        content_type = error.headers.get("Content-Type", "unknown")
         code = ""
-        if "application/json" in content_type:
-            try:
-                code = json.loads(error.read(65536)).get("error", "")
-            except (ValueError, AttributeError):
-                pass
+        response_hint = ""
+        try:
+            error_body = error.read(4096).decode("utf-8", "replace")
+            if "application/json" in content_type:
+                code = json.loads(error_body).get("error", "")
+            else:
+                candidate = " ".join(error_body.split())[:120]
+                if candidate and all(ch.isalnum() or ch in " ._:-" for ch in candidate):
+                    response_hint = candidate
+        except (ValueError, AttributeError):
+            pass
         safe_codes = {"UNAUTHORIZED", "FORBIDDEN", "INVALID_ORIGIN", "VALIDATION", "PAYLOAD_TOO_LARGE"}
         detail = code if code in safe_codes else "Access/edge rejected request; check service token policy and Access logs"
         content_type = error.headers.get("Content-Type", "unknown")
