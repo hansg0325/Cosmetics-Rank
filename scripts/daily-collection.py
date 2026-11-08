@@ -60,7 +60,7 @@ def request(path, body=None):
         raise RuntimeError(
             f"API {path}: HTTP {error.code}; {detail}; "
             f"server={server}; content_type={content_type}; cf_ray={cf_ray}; "
-            f"redirect_host={redirect_host or 'none'}"
+            f"redirect_host={redirect_host or 'none'}; response_hint={response_hint or 'none'}"
         ) from None
 
 def main():
