@@ -1,4 +1,5 @@
 import { loadKeywordRules, keywordRulesSchema } from "../shared/keywordRules";
+import { timingSafeEqual } from "node:crypto";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { createRemoteJWKSet, jwtVerify } from "jose";
@@ -11,6 +12,7 @@ type Env = {
   DB: D1Database;
   ASSETS: Fetcher;
   LOCAL_DEV_TOKEN?: string;
+  COLLECTION_API_KEY?: string;
   ACCESS_TEAM: string;
   ACCESS_AUD: string;
   ALLOWED_EMAIL: string;
@@ -25,6 +27,14 @@ app.use("*", async (c, next) => {
   // The desktop-only server binds to loopback. Its helper still uses the
   // internal token, but opening the local UI requires no login.
   let role: Role | null = local && !!c.env.LOCAL_DEV_TOKEN ? "admin" : null;
+  const machinePath = /^\/api\/imports(?:\/[^/]+\/(?:chunks|complete|cancel))?$/.test(url.pathname) ||
+    (c.req.method === "GET" && url.pathname === "/api/settings/keywords");
+  if (!role && machinePath && c.env.COLLECTION_API_KEY && c.req.header("authorization")) {
+    const encoder = new TextEncoder();
+    const provided = await crypto.subtle.digest("SHA-256", encoder.encode(c.req.header("authorization")!));
+    const expected = await crypto.subtle.digest("SHA-256", encoder.encode(`Bearer ${c.env.COLLECTION_API_KEY}`));
+    if (timingSafeEqual(new Uint8Array(provided), new Uint8Array(expected))) role = "admin";
+  }
   if (!role && c.env.ACCESS_TEAM && c.env.ACCESS_AUD && c.env.ALLOWED_EMAIL) {
     try {
       const issuer = `https://${c.env.ACCESS_TEAM}.cloudflareaccess.com`;

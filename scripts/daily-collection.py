@@ -1,0 +1,64 @@
+"""Scheduled collector. Never print credentials or product payloads."""
+import hashlib
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+from urllib.request import Request, urlopen
+
+ROOT = Path(__file__).resolve().parent.parent
+ORIGIN = os.environ["COLLECTION_ORIGIN"].rstrip("/")
+if not ORIGIN.startswith("https://"):
+    raise ValueError("HTTPS collection origin required")
+HEADERS = {
+    "Authorization": "Bearer " + os.environ["COLLECTION_API_KEY"],
+    "CF-Access-Client-Id": os.environ["CF_ACCESS_CLIENT_ID"],
+    "CF-Access-Client-Secret": os.environ["CF_ACCESS_CLIENT_SECRET"],
+    "Origin": ORIGIN,
+    "Content-Type": "application/json",
+}
+
+def request(path, body=None):
+    data = json.dumps(body).encode() if body is not None else None
+    with urlopen(Request(ORIGIN + "/api/" + path, data=data, headers=HEADERS), timeout=90) as response:
+        return json.load(response)
+
+def main():
+    rules = request("settings/keywords")
+    categories = json.loads((ROOT / "src/shared/collectionCategories.json").read_text())
+    failures = []
+    for category in categories:
+        run_id = None
+        try:
+            result = subprocess.run([sys.executable, "scripts/collect-rankings.py", "--category", category],
+                input=json.dumps(rules), text=True, encoding="utf-8", capture_output=True, cwd=ROOT, timeout=7200)
+            if result.returncode:
+                raise RuntimeError("Browser collection failed; no snapshot published")
+            line = next(line for line in result.stdout.splitlines() if line.startswith("COSMETICS_RANK_CAPTURE "))
+            capture = json.loads(line.split(" ", 1)[1])
+            rows = [{**row, "ranking_date": capture["ranking_date"], "category_code": category} for row in capture["rows"]]
+            if len(rows) != 100 or len({r["product_id"] for r in rows}) != 100 or {r["rank"] for r in rows} != set(range(1, 101)):
+                raise ValueError("Invalid ranking snapshot")
+            run = request("imports", {"ranking_date": capture["ranking_date"], "category_code": category,
+                "collected_at": capture["collected_at"], "source_type": "MANUAL", "replace": True,
+                "source_ref": "selenium:github:" + hashlib.sha256(json.dumps(rows, sort_keys=True).encode()).hexdigest()})
+            run_id = run["id"]
+            if not run.get("already_complete"):
+                for row in rows:
+                    request(f"imports/{run_id}/chunks", {"rows": [row]})
+                request(f"imports/{run_id}/complete", {"replace": True})
+            print(f"{category}: saved 100 rows", flush=True)
+        except Exception as error:
+            if run_id:
+                try:
+                    request(f"imports/{run_id}/cancel", {"failed": True})
+                except Exception:
+                    pass
+            print(f"{category}: failed ({type(error).__name__})", flush=True)
+            failures.append(category)
+    if failures:
+        raise SystemExit("Failed categories: " + ", ".join(failures))
+
+if __name__ == "__main__":
+    main()

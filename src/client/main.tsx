@@ -153,6 +153,11 @@ function App() {
   async function collectNow() {
     if (busy || collectionLock.current) return;
     collectionLock.current = true;
+    if (!["localhost", "127.0.0.1", "[::1]"].includes(window.location.hostname)) {
+      window.open("https://github.com/hansg0325/Cosmetics-Rank/actions/workflows/daily-collection.yml", "_blank", "noopener,noreferrer");
+      setMessage("GitHub Actions에서 Run workflow를 눌러 수집을 시작하세요.");
+      return;
+    }
     setBusy(true);
     setMessage("전체 카테고리 랭킹을 불러오는 중…");
     try {

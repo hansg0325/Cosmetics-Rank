@@ -1,0 +1,28 @@
+name: Daily ranking collection
+on:
+  schedule:
+    - cron: '0 21 * * *' # 06:00 Asia/Seoul
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: daily-ranking-collection
+  cancel-in-progress: false
+jobs:
+  collect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r scripts/requirements-selenium.txt
+      - name: Collect and save all categories
+        env:
+          COLLECTION_ORIGIN: https://cosmetics-rank.hansg0325.workers.dev
+          COLLECTION_API_KEY: ${{ secrets.COLLECTION_API_KEY }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          PYTHONIOENCODING: utf-8
+        run: python scripts/daily-collection.py

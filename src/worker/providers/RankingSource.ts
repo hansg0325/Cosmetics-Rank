@@ -3,4 +3,4 @@ export interface RankingSource {
   readonly type: "MANUAL" | "FIXTURE";
   read(): Promise<RankingRow[]>;
 }
-export const scheduleStatus = "DISABLED_NO_APPROVED_SOURCE";
+export const scheduleStatus = "GITHUB_ACTIONS_DAILY_06_KST";
