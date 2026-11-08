@@ -52,6 +52,8 @@ def request(path, body=None):
         ) from None
 
 def main():
+    # Temporary safe diagnostic: compare only the known v2 ID prefix; never print credential values.
+    print("Access client ID matches v2:", os.environ["CF_ACCESS_CLIENT_ID"].startswith("c2bcf43c"), flush=True)
     rules = request("settings/keywords")
     categories = json.loads((ROOT / "src/shared/collectionCategories.json").read_text())
     failures = []
