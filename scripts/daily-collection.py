@@ -5,13 +5,18 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from urllib.request import Request, urlopen
+from urllib.request import Request, build_opener, HTTPRedirectHandler
 from urllib.error import HTTPError
 
 ROOT = Path(__file__).resolve().parent.parent
 ORIGIN = os.environ["COLLECTION_ORIGIN"].rstrip("/")
 if not ORIGIN.startswith("https://"):
     raise ValueError("HTTPS collection origin required")
+class NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+OPENER = build_opener(NoRedirect)
 HEADERS = {
     "Authorization": "Bearer " + os.environ["COLLECTION_API_KEY"],
     "CF-Access-Client-Id": os.environ["CF_ACCESS_CLIENT_ID"],
@@ -23,9 +28,10 @@ HEADERS = {
 def request(path, body=None):
     data = json.dumps(body).encode() if body is not None else None
     try:
-        with urlopen(Request(ORIGIN + "/api/" + path, data=data, headers=HEADERS), timeout=90) as response:
+        with OPENER.open(Request(ORIGIN + "/api/" + path, data=data, headers=HEADERS), timeout=90) as response:
             if "application/json" not in response.headers.get("Content-Type", ""):
                 raise RuntimeError("API returned a login page instead of JSON; check the Access Service Auth policy")
+            print("Cloudflare Access credential pair: ACCEPTED (request reached Worker)", flush=True)
             return json.load(response)
     except HTTPError as error:
         content_type = error.headers.get("Content-Type", "")
@@ -45,6 +51,10 @@ def request(path, body=None):
         if location:
             from urllib.parse import urlsplit
             redirect_host = urlsplit(location).netloc
+        if error.code in {301, 302, 303, 307, 308} and redirect_host.endswith("cloudflareaccess.com"):
+            print("Cloudflare Access credential pair: REJECTED (redirected to Access login; secret value not logged)", flush=True)
+        elif code not in safe_codes:
+            print(f"Cloudflare Access credential pair: NOT CONFIRMED (HTTP {error.code}; see response metadata)", flush=True)
         raise RuntimeError(
             f"API {path}: HTTP {error.code}; {detail}; "
             f"server={server}; content_type={content_type}; cf_ray={cf_ray}; "
