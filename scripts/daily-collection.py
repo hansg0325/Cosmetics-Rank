@@ -114,8 +114,8 @@ def main():
                 "source_ref": "selenium:github:" + hashlib.sha256(json.dumps(rows, sort_keys=True).encode()).hexdigest()})
             run_id = run["id"]
             if not run.get("already_complete"):
-                for row in rows:
-                    request(f"imports/{run_id}/chunks", {"rows": [row]})
+                for offset in range(0, len(rows), 20):
+                    request(f"imports/{run_id}/chunks", {"rows": rows[offset:offset + 20]})
                 request(f"imports/{run_id}/complete", {"replace": True})
             print(f"{category}: saved 100 rows", flush=True)
         except Exception as error:
