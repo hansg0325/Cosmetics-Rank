@@ -25,6 +25,7 @@ USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/58.0.3029.110 Safari/537.3"
 )
+RANKING_TO_DETAILS_DELAY_SECONDS = 3
 BASE = "https://www.oliveyoung.co.kr"
 TARGETS = [
     ("overall", BASE + "/store/main/getBestList.do"),
@@ -131,6 +132,7 @@ def probe(kind, source, chrome_binary):
                 pass
         result = extract(driver, kind, source)
         if kind == "overall" and result["valid"]:
+            time.sleep(RANKING_TO_DETAILS_DELAY_SECONDS)
             enrich_product_details(driver, result["products"])
         if kind == "product" and not result["valid"]:
             result["selector_diagnostics"] = driver.execute_script("""
