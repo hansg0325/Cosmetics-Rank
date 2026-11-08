@@ -3,6 +3,24 @@ on:
   schedule:
     - cron: '0 21 * * *' # 06:00 Asia/Seoul
   workflow_dispatch:
+    inputs:
+      category:
+        description: Category to collect for a manual diagnostic run
+        required: true
+        type: choice
+        default: skincare
+        options:
+          - all
+          - overall
+          - skincare
+          - maskpack
+          - cleansing
+          - suncare
+          - makeup
+          - dermocosmetics
+          - haircare
+          - bodycare
+          - mens_edit
 permissions:
   contents: read
 concurrency:
@@ -24,5 +42,6 @@ jobs:
           COLLECTION_API_KEY: ${{ secrets.COLLECTION_API_KEY }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          COLLECTION_CATEGORY: ${{ github.event_name == 'schedule' && 'all' || inputs.category || 'all' }}
           PYTHONIOENCODING: utf-8
         run: python scripts/daily-collection.py

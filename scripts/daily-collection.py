@@ -1,5 +1,6 @@
 """Scheduled collector. Never print credentials or product payloads."""
 import hashlib
+import argparse
 import json
 import os
 import subprocess
@@ -83,8 +84,12 @@ def main():
     print("Access client ID matches v2:", os.environ["CF_ACCESS_CLIENT_ID"].startswith("c2bcf43c"), flush=True)
     rules = request("settings/keywords")
     categories = json.loads((ROOT / "src/shared/collectionCategories.json").read_text())
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--category", choices=["all", *categories],
+                        default=os.environ.get("COLLECTION_CATEGORY", "all"))
+    selected_category = parser.parse_args().category
     failures = []
-    category_codes = list(categories)
+    category_codes = list(categories) if selected_category == "all" else [selected_category]
     for category_index, category in enumerate(category_codes):
         run_id = None
         try:
