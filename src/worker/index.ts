@@ -14,21 +14,18 @@ type Env = {
   ACCESS_TEAM: string;
   ACCESS_AUD: string;
   ALLOWED_EMAIL: string;
+  VIEWER_EMAILS?: string;
 };
-const app = new Hono<{ Bindings: Env }>();
+type Role = "admin" | "viewer";
+const app = new Hono<{ Bindings: Env; Variables: { role: Role } }>();
 const keysets = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 app.use("*", async (c, next) => {
   const url = new URL(c.req.url);
   const local = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
   // The desktop-only server binds to loopback. Its helper still uses the
   // internal token, but opening the local UI requires no login.
-  let authorized = local && !!c.env.LOCAL_DEV_TOKEN;
-  if (
-    !authorized &&
-    c.env.ACCESS_TEAM &&
-    c.env.ACCESS_AUD &&
-    c.env.ALLOWED_EMAIL
-  ) {
+  let role: Role | null = local && !!c.env.LOCAL_DEV_TOKEN ? "admin" : null;
+  if (!role && c.env.ACCESS_TEAM && c.env.ACCESS_AUD && c.env.ALLOWED_EMAIL) {
     try {
       const issuer = `https://${c.env.ACCESS_TEAM}.cloudflareaccess.com`;
       if (!/^[a-z0-9-]+$/.test(c.env.ACCESS_TEAM)) throw Error();
@@ -42,18 +39,41 @@ app.use("*", async (c, next) => {
         keys,
         { issuer, audience: c.env.ACCESS_AUD },
       );
-      authorized = payload.email === c.env.ALLOWED_EMAIL;
+      const email =
+        typeof payload.email === "string" ? payload.email.toLowerCase() : "";
+      const adminEmail = c.env.ALLOWED_EMAIL.trim().toLowerCase();
+      const viewerEmails = (c.env.VIEWER_EMAILS || "")
+        .split(",")
+        .map((value) => value.trim().toLowerCase())
+        .filter(Boolean);
+      if (email && email === adminEmail) role = "admin";
+      else if (email && viewerEmails.includes(email)) role = "viewer";
     } catch {
       /* fail closed */
     }
   }
-  if (!authorized) {
+  if (!role) {
     return c.json({ error: "UNAUTHORIZED" }, 401);
   }
+  c.set("role", role);
   if (c.req.method === "POST" && c.req.header("origin") !== url.origin)
     return c.json({ error: "INVALID_ORIGIN" }, 403);
   c.header("Cache-Control", "no-store");
   c.header("X-Content-Type-Options", "nosniff");
+  await next();
+});
+app.use("/api/*", async (c, next) => {
+  const path = new URL(c.req.url).pathname;
+  if (
+    c.get("role") !== "admin" &&
+    (c.req.method !== "GET" ||
+      path === "/api/imports" ||
+      path.startsWith("/api/imports/") ||
+      path === "/api/export-rankings" ||
+      path === "/api/settings/keywords" ||
+      path.startsWith("/api/collector/"))
+  )
+    return c.json({ error: "FORBIDDEN" }, 403);
   await next();
 });
 app.use(
@@ -71,6 +91,7 @@ app.onError((err, c) => {
   return c.json({ error: "IMPORT_CONFLICT_OR_DATABASE_ERROR" }, 409);
 });
 app.get("/api/health", (c) => c.json({ ok: true, schedule: scheduleStatus }));
+app.get("/api/me", (c) => c.json({ role: c.get("role") }));
 app.get("/api/settings/keywords", async (c) =>
   c.json(await loadKeywordRules(c.env.DB)),
 );

@@ -52,6 +52,7 @@ async function api<T = unknown>(path: string, body?: unknown): Promise<T> {
 }
 function App() {
   const collectionLock = useRef(false);
+  const [role, setRole] = useState<"admin" | "viewer" | null>(null);
   const [productId, setProductId] = useState<string | null>(null),
     [productCategory, setProductCategory] = useState("overall");
   const [page, setPage] = useState("대시보드"),
@@ -75,16 +76,21 @@ function App() {
       setRunsLoading(false);
     }
   };
-  const refresh = async () => {
+  const refresh = async (isAdmin = role === "admin") => {
     await Promise.all([
-      loadRuns(runPage),
+      ...(isAdmin ? [loadRuns(runPage)] : []),
       api<{ code: string; display_name: string }[]>("categories").then(
         setCategories,
       ),
     ]);
   };
   useEffect(() => {
-    refresh().catch((e) => setMessage(String(e)));
+    api<{ role: "admin" | "viewer" }>("me")
+      .then(async ({ role: nextRole }) => {
+        setRole(nextRole);
+        await refresh(nextRole === "admin");
+      })
+      .catch((e) => setMessage(String(e)));
   }, []);
   async function upload(inputRows: RankingRow[], inputCapture: BrowserCapture) {
     let current: string | undefined;
@@ -236,8 +242,7 @@ function App() {
             "순위 변동",
             "상품 이력",
             "점유율 분석",
-            "설정",
-            "관리자",
+            ...(role === "admin" ? ["설정", "관리자"] : []),
           ].map((p) => (
             <button
               key={p}
@@ -267,7 +272,7 @@ function App() {
         {page === "대시보드" && (
           <DashboardPanel onProduct={openProduct} revision={revision} />
         )}
-        {page === "관리자" && (
+        {role === "admin" && page === "관리자" && (
           <article>
             <h2>랭킹 데이터 수집</h2>
             <button
@@ -279,9 +284,11 @@ function App() {
             </button>
           </article>
         )}
-        {page === "관리자" && <AdminExport disabled={busy} />}
+        {role === "admin" && page === "관리자" && (
+          <AdminExport disabled={busy} />
+        )}
         {page === "점유율 분석" && <MarketSharePanel revision={revision} />}
-        {page === "설정" && <KeywordSettings />}
+        {role === "admin" && page === "설정" && <KeywordSettings />}
         {["랭킹", "순위 변동"].includes(page) && (
           <RankingsPanel
             key={page}
@@ -302,7 +309,7 @@ function App() {
             revision={revision}
           />
         )}
-        {page === "관리자" && (
+        {role === "admin" && page === "관리자" && (
           <article>
             <div className="card-title">
               <h2>최근 수집 이력</h2>
@@ -351,7 +358,7 @@ function App() {
                           <button
                             onClick={() =>
                               void api(`imports/${r.id}/cancel`, {})
-                                .then(refresh)
+                                .then(() => refresh())
                                 .catch((e) => setMessage(String(e)))
                             }
                           >
@@ -371,9 +378,7 @@ function App() {
               <button
                 disabled={runPage === 0 || runsLoading}
                 onClick={() =>
-                  void loadRuns(runPage - 1).catch((e) =>
-                    setMessage(String(e)),
-                  )
+                  void loadRuns(runPage - 1).catch((e) => setMessage(String(e)))
                 }
               >
                 이전
@@ -382,9 +387,7 @@ function App() {
               <button
                 disabled={!hasNextRuns || runsLoading}
                 onClick={() =>
-                  void loadRuns(runPage + 1).catch((e) =>
-                    setMessage(String(e)),
-                  )
+                  void loadRuns(runPage + 1).catch((e) => setMessage(String(e)))
                 }
               >
                 다음
