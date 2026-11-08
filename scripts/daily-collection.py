@@ -6,6 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 from urllib.request import Request, urlopen
+from urllib.error import HTTPError
 
 ROOT = Path(__file__).resolve().parent.parent
 ORIGIN = os.environ["COLLECTION_ORIGIN"].rstrip("/")
@@ -21,8 +22,22 @@ HEADERS = {
 
 def request(path, body=None):
     data = json.dumps(body).encode() if body is not None else None
-    with urlopen(Request(ORIGIN + "/api/" + path, data=data, headers=HEADERS), timeout=90) as response:
-        return json.load(response)
+    try:
+        with urlopen(Request(ORIGIN + "/api/" + path, data=data, headers=HEADERS), timeout=90) as response:
+            if "application/json" not in response.headers.get("Content-Type", ""):
+                raise RuntimeError("API returned a login page instead of JSON; check the Access Service Auth policy")
+            return json.load(response)
+    except HTTPError as error:
+        content_type = error.headers.get("Content-Type", "")
+        code = ""
+        if "application/json" in content_type:
+            try:
+                code = json.loads(error.read(65536)).get("error", "")
+            except (ValueError, AttributeError):
+                pass
+        safe_codes = {"UNAUTHORIZED", "FORBIDDEN", "INVALID_ORIGIN", "VALIDATION", "PAYLOAD_TOO_LARGE"}
+        detail = code if code in safe_codes else "Access/edge rejected request; check service token policy and Access logs"
+        raise RuntimeError(f"API {path}: HTTP {error.code}; {detail}") from None
 
 def main():
     rules = request("settings/keywords")
