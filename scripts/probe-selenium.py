@@ -37,6 +37,60 @@ def emit(value):
     print(json.dumps(value, ensure_ascii=False), flush=True)
 
 
+def document_response(driver, expected_url):
+    """Return the main Olive Young document response status from Chrome logs."""
+    expected = urlsplit(expected_url)
+    matches = []
+    try:
+        entries = driver.get_log("performance")
+    except Exception:
+        return None
+    for entry in entries:
+        try:
+            message = json.loads(entry["message"])["message"]
+            if message.get("method") != "Network.responseReceived":
+                continue
+            params = message.get("params", {})
+            response = params.get("response", {})
+            parsed = urlsplit(response.get("url", ""))
+            if (params.get("type") == "Document" and parsed.netloc == expected.netloc
+                    and parsed.path == expected.path):
+                matches.append({"status": response.get("status"), "url": response.get("url")})
+        except (KeyError, TypeError, ValueError):
+            continue
+    return matches[-1] if matches else None
+
+
+def page_diagnostic(driver, source, stage, navigation_timed_out=False):
+    try:
+        body = driver.execute_script("return document.body?.innerText || ''") or ""
+    except Exception:
+        body = ""
+    try:
+        final_url = driver.current_url
+    except Exception:
+        final_url = ""
+    try:
+        page_title = driver.title
+    except Exception:
+        page_title = ""
+    try:
+        user_agent = driver.execute_script("return navigator.userAgent")
+    except Exception:
+        user_agent = ""
+    return {
+        "stage": stage,
+        "requested_url": source,
+        "final_url": final_url,
+        "document_response": document_response(driver, source),
+        "page_title": page_title,
+        "page_excerpt": " ".join(body.split())[:600],
+        "browser_version": driver.capabilities.get("browserVersion", ""),
+        "effective_user_agent": user_agent,
+        "navigation_timed_out": navigation_timed_out,
+    }
+
+
 def extract(driver, kind, source):
     if kind == "overall":
         expected_tab = parse_qs(urlsplit(source).query).get("fltDispCatNo", [""])[0]
@@ -107,31 +161,45 @@ def probe(kind, source, chrome_binary):
     options.add_argument("--no-sandbox")
     options.page_load_strategy = "eager"
     options.add_argument(f"user-agent={USER_AGENT}")
+    options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
     if chrome_binary:
         options.binary_location = chrome_binary
     driver = None
     started = time.monotonic()
+    stage = "browser_start"
+    navigation_timed_out = False
     try:
         driver = webdriver.Chrome(options=options)
         # Unlike the reference, apply timeout BEFORE get().
         driver.set_page_load_timeout(30)
+        stage = "ranking_navigation"
         try:
             driver.get(source)
         except TimeoutException:
+            navigation_timed_out = True
             emit({"target": kind, "stage": "page_load_timeout"})
+        stage = "ranking_page_wait"
         time.sleep(10)
+        stage = "initial_rank_extraction"
         initial = extract(driver, kind, source)
         emit({"target": kind, "stage": "after_reference_10s_wait",
-              "title": driver.title, "product_count": initial["product_count"]})
+              "title": driver.title, "current_url": driver.current_url,
+              "product_count": initial["product_count"],
+              "category_matches": initial.get("category_matches")})
         if not initial["valid"]:
+            stage = "category_validation_wait"
             try:
                 WebDriverWait(driver, 20, poll_frequency=2).until(
                     lambda d: extract(d, kind, source)["valid"]
                 )
             except TimeoutException:
                 pass
+        stage = "final_rank_validation"
         result = extract(driver, kind, source)
+        if not result["valid"]:
+            result.update(page_diagnostic(driver, source, stage, navigation_timed_out))
         if kind == "overall" and result["valid"]:
+            stage = "product_detail_enrichment"
             time.sleep(RANKING_TO_DETAILS_DELAY_SECONDS)
             enrich_product_details(driver, result["products"])
         if kind == "product" and not result["valid"]:
@@ -148,9 +216,10 @@ def probe(kind, source, chrome_binary):
                 "effective_user_agent": driver.execute_script("return navigator.userAgent"),
                 **result}
     except Exception as error:
+        details = page_diagnostic(driver, source, stage, navigation_timed_out) if driver is not None else {}
         return {"target": kind, "source_url": source, "valid": False,
                 "product_count": 0, "error_type": type(error).__name__,
-                "error": str(error)[:1200]}
+                "error": str(error)[:1200], **details}
     finally:
         if driver is not None:
             driver.quit()

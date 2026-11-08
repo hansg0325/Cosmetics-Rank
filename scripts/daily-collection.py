@@ -97,9 +97,17 @@ def main():
                     diagnostic = json.loads(error_line.split(" ", 1)[1])
                     raise RuntimeError(
                         "Browser collection failed; no snapshot published; "
+                        f"stage={diagnostic.get('stage') or 'unknown'}; "
+                        f"requested_url={diagnostic.get('requested_url') or 'unknown'}; "
+                        f"final_url={diagnostic.get('final_url') or 'unknown'}; "
+                        f"document_response={json.dumps(diagnostic.get('document_response'), ensure_ascii=False)}; "
                         f"page_title={diagnostic.get('page_title') or 'empty'}; "
+                        f"page_excerpt={diagnostic.get('page_excerpt') or 'empty'}; "
                         f"products={diagnostic.get('product_count', 0)}; "
                         f"category_matches={diagnostic.get('category_matches')}; "
+                        f"browser_version={diagnostic.get('browser_version') or 'unknown'}; "
+                        f"effective_user_agent={diagnostic.get('effective_user_agent') or 'unknown'}; "
+                        f"navigation_timed_out={diagnostic.get('navigation_timed_out', False)}; "
                         f"error_type={diagnostic.get('error_type') or 'none'}; "
                         f"error={diagnostic.get('error') or 'none'}"
                     )

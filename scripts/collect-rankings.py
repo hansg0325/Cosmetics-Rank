@@ -24,9 +24,17 @@ result = module.probe("overall", source, os.environ.get("COSMETICS_RANK_CHROME_B
 if not result.get("valid"):
     print("COSMETICS_RANK_ERROR " + json.dumps({
         "message": categories[category]["name"] + " 랭킹 100개 또는 선택된 카테고리를 확인하지 못했습니다.",
-        "page_title": result.get("title", ""),
+        "page_title": result.get("page_title", result.get("title", "")),
         "product_count": result.get("product_count", 0),
         "category_matches": result.get("category_matches"),
+        "stage": result.get("stage", ""),
+        "requested_url": result.get("requested_url", source),
+        "final_url": result.get("final_url", ""),
+        "document_response": result.get("document_response"),
+        "page_excerpt": result.get("page_excerpt", ""),
+        "browser_version": result.get("browser_version", ""),
+        "effective_user_agent": result.get("effective_user_agent", ""),
+        "navigation_timed_out": result.get("navigation_timed_out", False),
         "error_type": result.get("error_type", ""),
         "error": result.get("error", "")[:500],
     }, ensure_ascii=False), flush=True)
