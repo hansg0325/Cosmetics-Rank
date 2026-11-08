@@ -18,6 +18,9 @@ class NoRedirect(HTTPRedirectHandler):
 
 OPENER = build_opener(NoRedirect)
 HEADERS = {
+    # Cloudflare Browser Integrity Check blocks urllib's default Python User-Agent
+    # on workers.dev; identify this scheduled client explicitly.
+    "User-Agent": "CosmeticsRankCollector/1.0 (+https://github.com/hansg0325/Cosmetics-Rank)",
     "Authorization": "Bearer " + os.environ["COLLECTION_API_KEY"],
     "CF-Access-Client-Id": os.environ["CF_ACCESS_CLIENT_ID"],
     "CF-Access-Client-Secret": os.environ["CF_ACCESS_CLIENT_SECRET"],
