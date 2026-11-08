@@ -53,7 +53,9 @@ def request(path, body=None):
             redirect_host = urlsplit(location).netloc
         if error.code in {301, 302, 303, 307, 308} and redirect_host.endswith("cloudflareaccess.com"):
             print("Cloudflare Access credential pair: REJECTED (redirected to Access login; secret value not logged)", flush=True)
-        elif code not in safe_codes:
+        elif code in safe_codes:
+            print(f"Cloudflare Access credential pair: ACCEPTED (Worker API responded with {code}; secret value not logged)", flush=True)
+        else:
             print(f"Cloudflare Access credential pair: NOT CONFIRMED (HTTP {error.code}; see response metadata)", flush=True)
         raise RuntimeError(
             f"API {path}: HTTP {error.code}; {detail}; "
