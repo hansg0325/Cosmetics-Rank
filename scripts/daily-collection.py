@@ -11,7 +11,7 @@ from urllib.error import HTTPError
 
 ROOT = Path(__file__).resolve().parent.parent
 ORIGIN = os.environ["COLLECTION_ORIGIN"].rstrip("/")
-CATEGORY_INTERVAL_SECONDS = 3
+CATEGORY_INTERVAL_SECONDS = 10
 ACCESS_ACCEPTANCE_LOGGED = False
 if not ORIGIN.startswith("https://"):
     raise ValueError("HTTPS collection origin required")

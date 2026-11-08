@@ -25,7 +25,7 @@ USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/58.0.3029.110 Safari/537.3"
 )
-RANKING_TO_DETAILS_DELAY_SECONDS = 3
+RANKING_TO_DETAILS_DELAY_SECONDS = 10
 BASE = "https://www.oliveyoung.co.kr"
 TARGETS = [
     ("overall", BASE + "/store/main/getBestList.do"),
