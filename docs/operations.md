@@ -9,9 +9,9 @@ README 빠른 시작을 따릅니다. `.dev.vars.example`은 형식 예시이고
 ## 무료 계정 배포 준비 — 이번 작업에서 실행하지 않음
 
 1. Cloudflare Workers Free / D1 Free / Zero Trust Access Free 계정에서 시작합니다. 유료 플랜이나 카드 등록을 요구하는 기능을 추가하지 않습니다.
-2. `pnpm exec wrangler login`으로 계정 로그인, `pnpm exec wrangler d1 create cosmetics-rank`로 DB 생성 후 반환 ID를 `wrangler.jsonc`의 database_id에 설정합니다. 현재 0으로 채운 ID는 로컬 전용 자리표시자입니다.
+2. `pnpm exec wrangler login`으로 계정에 로그인합니다. APAC 리전의 원격 D1 `cosmetics-rank`는 생성됐고 반환된 ID를 `wrangler.jsonc`에 설정했습니다. 새 Cloudflare 계정에서 다시 배포할 경우 해당 계정의 D1을 새로 만들어 ID를 교체해야 합니다.
 3. Cloudflare Workers 대시보드에서 해당 Worker에 Worker-level Cloudflare Access 보호를 설정합니다. 관리자와 조회 사용자 이메일만 허용하고 workers.dev 및 preview 경로까지 보호되는지 확인합니다. 설정 전에 실데이터를 업로드하지 마세요. 계정 UI 흐름상 Worker 생성이 먼저 필요하면 기본 인증 거부 상태로만 빈 Worker를 생성하고 Access를 먼저 설정합니다.
-4. `ACCESS_TEAM`(팀 슬러그), `ACCESS_AUD`(Access application audience), `ALLOWED_EMAIL`(관리자 이메일)을 Worker 환경변수/secret으로 설정합니다. 조회 사용자는 `VIEWER_EMAILS`에 이메일을 쉼표로 구분해 설정합니다(예: `user1@example.com,user2@example.com`). Access 허용 정책에도 같은 이메일을 추가해야 합니다. `VIEWER_EMAILS`가 비어 있으면 관리자만 접속합니다. 로컬 토큰을 원격 secret으로 등록하지 마세요. 현재 기본값은 빈 문자열이므로 원격은 401로 닫힙니다.
+4. `ACCESS_TEAM`(팀 슬러그), `ACCESS_AUD`(Access application audience), `ALLOWED_EMAIL`(관리자 이메일)을 Worker secret으로 설정합니다. 조회 사용자는 `VIEWER_EMAILS`에 이메일을 쉼표로 구분해 설정합니다(예: `user1@example.com,user2@example.com`). Access 허용 정책에도 같은 이메일을 추가해야 합니다. `VIEWER_EMAILS`가 비어 있으면 관리자만 접속합니다. 로컬 토큰을 원격 secret으로 등록하지 마세요. 인증값이 설정되지 않으면 원격은 401로 닫힙니다.
 5. `pnpm exec wrangler d1 migrations apply cosmetics-rank --remote`, `pnpm build`, `pnpm exec wrangler deploy`. 실제 URL은 해당 계정에서 생성됩니다. 이번 작업에서는 계정 로그인·원격 DB 생성·배포를 하지 않았습니다.
 6. 로그아웃/시크릿 브라우저, 미허용 사용자, 관리자, 조회 사용자, JWT 누락/변조, preview URL, 정적 JS/CSV 직접 URL을 각각 확인합니다. 허용된 이메일만 접근하도록 설정한 후 데이터를 사용합니다. 로컬 mock 테스트는 배포 Access 정책 검증을 대신하지 않습니다.
 
