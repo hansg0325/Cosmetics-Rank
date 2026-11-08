@@ -78,7 +78,7 @@ export function ImportedRankings({
               <th>순위</th>
               <th>브랜드</th>
               <th>상품명</th>
-              <th>원본</th>
+              <th>링크</th>
             </tr>
           </thead>
           <tbody>

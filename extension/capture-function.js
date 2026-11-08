@@ -20,7 +20,7 @@ const capture=function captureRanking(doc, pageUrl, now) {
         const product_name = card.querySelector(".tx_name")?.textContent?.trim() || "";
         if (link.origin !== page.origin ||
             link.pathname !== "/store/goods/getGoodsDetail.do" ||
-            !/^A\d{12}$/.test(product_id) ||
+            !/^[AB]\d{12}$/.test(product_id) ||
             !brand_name ||
             !product_name)
             throw new Error("상품 식별자 또는 상품명이 올바르지 않습니다.");

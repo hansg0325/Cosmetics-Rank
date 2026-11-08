@@ -66,11 +66,9 @@ export function RankChart({
 }) {
   const [hover, setHover] = useState<string | null>(null),
     [pin, setPin] = useState<string | null>(null),
-    [index, setIndex] = useState<number | null>(null),
-    [full, setFull] = useState(false);
+    [index, setIndex] = useState<number | null>(null);
   const svg = useRef<SVGSVGElement>(null);
-  const titleId = useId(),
-    helpId = useId();
+  const titleId = useId();
   const requested = hover || pin;
   const active = series.some((s) => s.id === requested) ? requested : null;
   const current = series.find((s) => s.id === active);
@@ -79,7 +77,7 @@ export function RankChart({
     30,
     ...series.flatMap((s) => s.points.map((p) => p.rank || 0)),
   );
-  const max = full ? 100 : Math.min(100, Math.ceil(bestMax / 10) * 10);
+  const max = Math.min(100, Math.ceil(bestMax / 10) * 10);
   const point = current?.points[index ?? Math.max(0, dates.length - 1)];
   const pointer = (clientX: number) => {
     if (!svg.current) return;
@@ -108,20 +106,7 @@ export function RankChart({
     <section className="rank-chart" aria-labelledby={titleId}>
       <div className="card-title">
         <h2 id={titleId}>{title}</h2>
-        <label className="chart-scale">
-          <input
-            type="checkbox"
-            checked={full}
-            onChange={(e) => setFull(e.target.checked)}
-          />
-          전체 1~100위 축
-        </label>
       </div>
-      <p id={helpId}>
-        선·상품명에 마우스를 올리면 해당 상품만 강조됩니다. 상품명을 클릭하거나
-        터치하면 강조를 고정합니다. 키보드로 상품명에 초점을 두고 ← → 키로
-        날짜를 확인할 수 있습니다.
-      </p>
       {!hasPoints && (
         <p className="empty">선택 기간에 표시할 순위 기록이 없습니다.</p>
       )}
@@ -129,10 +114,9 @@ export function RankChart({
         <div className="chart-plot">
           <svg
             ref={svg}
-            viewBox="0 0 800 390"
+            viewBox="0 0 800 375"
             role="img"
             aria-label={`${title}: 1위가 위쪽, ${max}위가 아래쪽. ${series.length}개 상품 비교`}
-            aria-describedby={helpId}
             onPointerMove={(e) => pointer(e.clientX)}
             onPointerLeave={() => {
               setHover(null);
@@ -172,22 +156,13 @@ export function RankChart({
                     (dates.length === 1 ? 354 : (i / (dates.length - 1)) * 708)
                   }
                   y="363"
-                  textAnchor={
-                    i === 0
-                      ? "start"
-                      : i === dates.length - 1
-                        ? "end"
-                        : "middle"
-                  }
+                  textAnchor="middle"
                   className="axis-label"
                 >
                   {p.date.slice(5)}
                 </text>
               ) : null,
             )}
-            <text x="410" y="387" textAnchor="middle" className="axis-label">
-              수집 날짜 (KST) · 1위가 위쪽
-            </text>
             {series.map((s, n) => (
               <g
                 key={s.id}
@@ -280,12 +255,7 @@ export function RankChart({
                       : `${point.rank}위`}
                 </span>
               </>
-            ) : (
-              <span>
-                선 위에 마우스를 올려 날짜와 순위를 확인하세요. 미수집·100위권
-                밖 구간은 연결하지 않습니다.
-              </span>
-            )}
+            ) : null}
           </div>
         </div>
         <div className="chart-legend" aria-label="비교 상품 범례">
@@ -333,39 +303,6 @@ export function RankChart({
           ))}
         </div>
       </div>
-      {!!dates.length && (
-        <details className="chart-data">
-          <summary>날짜별 순위 데이터 보기</summary>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>날짜</th>
-                  {series.map((s) => (
-                    <th key={s.id}>
-                      {s.brand} · {s.name}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {dates.map((p, i) => (
-                  <tr key={p.date}>
-                    <td>{p.date}</td>
-                    {series.map((s) => (
-                      <td key={s.id}>
-                        {s.points[i]?.state === "MISSING"
-                          ? "미수집"
-                          : (s.points[i]?.rank ?? "100위권 밖")}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </details>
-      )}
     </section>
   );
 }

@@ -29,7 +29,7 @@ export function captureRanking(doc: Document, pageUrl: string, now: string) {
       if (
         link.origin !== page.origin ||
         link.pathname !== "/store/goods/getGoodsDetail.do" ||
-        !/^A\d{12}$/.test(product_id) ||
+        !/^[AB]\d{12}$/.test(product_id) ||
         !brand_name ||
         !product_name
       )

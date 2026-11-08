@@ -2,6 +2,8 @@
 import argparse
 import hmac
 import json
+import math
+from ingredient_keywords import KEYWORDS, validate_rules
 import os
 import re
 import signal
@@ -16,6 +18,7 @@ from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE = "https://www.oliveyoung.co.kr/store/main/getBestList.do"
+CATEGORIES = json.loads((ROOT / "src/shared/collectionCategories.json").read_text(encoding="utf-8"))
 
 
 def utc_now():
@@ -25,8 +28,9 @@ def utc_now():
 def validate_capture(capture):
     if set(capture) != {"format", "source_url", "collected_at", "ranking_date", "category_code", "rows"}:
         raise ValueError("수집 데이터 형식이 잘못됐습니다.")
-    if capture["format"] != "oliverank-browser-v1" or capture["source_url"] != SOURCE or capture["category_code"] != "overall":
-        raise ValueError("전체 랭킹 출처를 확인할 수 없습니다.")
+    category = capture["category_code"]
+    if category not in CATEGORIES or capture["format"] != "oliverank-browser-v1" or capture["source_url"] != CATEGORIES[category]["source_url"]:
+        raise ValueError("랭킹 출처와 카테고리를 확인할 수 없습니다.")
     at = datetime.fromisoformat(capture["collected_at"].replace("Z", "+00:00"))
     if at.utcoffset() != timedelta(0) or at.astimezone(timezone(timedelta(hours=9))).date().isoformat() != capture["ranking_date"]:
         raise ValueError("수집 시각과 KST 날짜가 다릅니다.")
@@ -34,9 +38,23 @@ def validate_capture(capture):
     if len(rows) != 100 or {r["rank"] for r in rows} != set(range(1, 101)) or len({r["product_id"] for r in rows}) != 100:
         raise ValueError("중복 없는 전체 순위 1~100이 필요합니다.")
     for row in rows:
-        if set(row) != {"rank", "product_id", "brand_name", "product_name", "product_url"}:
+        required = {"rank", "product_id", "brand_name", "product_name", "product_url"}
+        if not required <= set(row) or set(row) - required - {"product_category", "review_count", "rating", "manufacturer_name", "seller_name", "manufacturer_disclosure", "keywords"}:
             raise ValueError("허용되지 않은 상품 필드입니다.")
-        if type(row["rank"]) is not int or not re.fullmatch(r"A\d{12}", row["product_id"]):
+        if "product_category" in row and (not isinstance(row["product_category"], str) or len(row["product_category"].strip()) > 100):
+            raise ValueError("상품 대분류 오류입니다.")
+        keywords = row.get("keywords")
+        if keywords is not None and (not isinstance(keywords, list) or len(keywords) > 100 or any(not isinstance(word, str) or not 1 <= len(word.strip()) <= 100 or any(c in word for c in ",\r\n") for word in keywords) or len(set(keywords)) != len(keywords)):
+            raise ValueError("키워드 오류입니다.")
+        for field in ("manufacturer_name", "seller_name", "manufacturer_disclosure"):
+            if row.get(field) is not None and (not isinstance(row[field], str) or len(row[field]) > 10000):
+                raise ValueError("제조사·판매업자 정보 오류입니다.")
+        count, rating = row.get("review_count"), row.get("rating")
+        if count is not None and (type(count) is not int or not 0 <= count <= 1_000_000_000):
+            raise ValueError("리뷰 수 오류입니다.")
+        if rating is not None and (type(rating) not in (int, float) or not math.isfinite(rating) or not 0 <= rating <= 5):
+            raise ValueError("평점 오류입니다.")
+        if type(row["rank"]) is not int or not re.fullmatch(r"[AB]\d{12}", row["product_id"]):
             raise ValueError("상품 ID 또는 순위 오류입니다.")
         if not all(isinstance(row[k], str) and 0 < len(row[k].strip()) <= 300 for k in ("brand_name", "product_name")):
             raise ValueError("상품명 또는 브랜드 오류입니다.")
@@ -62,14 +80,17 @@ class SeleniumRunner:
         self.lock = threading.Lock()
         self.process = None
 
-    def __call__(self):
+    def __call__(self, category="overall", keyword_rules=None):
+        if category not in CATEGORIES:
+            raise ValueError("지원하지 않는 카테고리입니다.")
         kwargs = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {"start_new_session": True}
-        process = subprocess.Popen([sys.executable, "-u", "-X", "utf8", str(ROOT / "scripts/collect-rankings.py")], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", **kwargs)
+        rules_input = json.dumps(validate_rules(keyword_rules), ensure_ascii=False) if keyword_rules is not None else ""
+        process = subprocess.Popen([sys.executable, "-u", "-X", "utf8", str(ROOT / "scripts/collect-rankings.py"), "--category", category], cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", **kwargs)
         with self.lock:
             self.process = process
         try:
             try:
-                stdout, _stderr = process.communicate(timeout=95)
+                stdout, _stderr = process.communicate(input=rules_input, timeout=3900)
             except subprocess.TimeoutExpired:
                 kill_tree(process)
                 process.communicate()
@@ -101,23 +122,36 @@ class Jobs:
         self.lock = threading.Lock()
         self.jobs = {}
 
-    def start(self):
+    def start(self, category="overall", keyword_rules=None):
+        if category not in CATEGORIES:
+            raise ValueError("지원하지 않는 카테고리입니다.")
         with self.lock:
             for job in self.jobs.values():
                 if job["status"] == "RUNNING":
+                    if job["category_code"] != category or job.get("keyword_rules") != keyword_rules:
+                        raise ValueError("다른 카테고리 또는 키워드 설정으로 수집 중입니다. 완료 후 다시 시도하세요.")
                     return {"id": job["id"], "status": job["status"], "reused": True}
             # Keep a bounded in-memory history, never cookie/profile data.
             while len(self.jobs) >= 8:
                 del self.jobs[next(iter(self.jobs))]
             job_id = str(uuid.uuid4())
-            self.jobs[job_id] = {"id": job_id, "status": "RUNNING", "started_at": utc_now()}
-        threading.Thread(target=self._run, args=(job_id,), daemon=True).start()
+            self.jobs[job_id] = {"id": job_id, "status": "RUNNING", "category_code": category, "keyword_rules": keyword_rules, "started_at": utc_now()}
+        threading.Thread(target=self._run, args=(job_id, category, keyword_rules), daemon=True).start()
         return {"id": job_id, "status": "RUNNING", "reused": False}
 
-    def _run(self, job_id):
+    def _run(self, job_id, category, keyword_rules=None):
         try:
-            capture = validate_capture(self.runner())
-            update = {"status": "COMPLETE", "capture": capture}
+            capture = validate_capture(self.runner(category, keyword_rules) if keyword_rules is not None else (self.runner() if category == "overall" else self.runner(category)))
+            if capture["category_code"] != category:
+                raise ValueError("요청한 카테고리와 수집 결과가 다릅니다.")
+            entries = capture["rows"]
+            coverage = {"total": len(entries),
+                "manufacturers": sum(row.get("manufacturer_name") is not None for row in entries),
+                "sellers": sum(row.get("seller_name") is not None for row in entries),
+                "ingredients": sum(row.get("keywords") is not None for row in entries),
+                "reviews": sum(row.get("review_count") is not None for row in entries),
+                "ratings": sum(row.get("rating") is not None for row in entries)}
+            update = {"status": "COMPLETE", "capture": capture, "coverage": coverage}
         except Exception as error:
             # No raw driver trace or tokens are returned over HTTP.
             message = str(error) if isinstance(error, (RuntimeError, ValueError)) else "수집 중 오류가 발생했습니다. 잠시 후 다시 시도하세요."
@@ -175,7 +209,7 @@ def handler_for(jobs, token):
                 return
             try:
                 size = int(self.headers.get("Content-Length", "0"))
-                if not 0 <= size <= 1024:
+                if not 0 <= size <= 65536:
                     # Drain a bounded small body before rejecting it. Closing with
                     # unread bytes can reset the response on Windows sockets.
                     if 1024 < size <= 65536:
@@ -186,7 +220,12 @@ def handler_for(jobs, token):
                             pass
                     self.send_json(413, {"error": "TOO_LARGE"})
                     return
-                if json.loads(self.rfile.read(size) or b"{}") != {}:
+                body = json.loads(self.rfile.read(size) or b"{}")
+                if not isinstance(body, dict) or set(body) - ({"category_code", "keyword_rules"} if self.path == "/jobs" else set()):
+                    raise ValueError()
+                keyword_rules = validate_rules(body["keyword_rules"]) if "keyword_rules" in body else None
+                category = body.get("category_code", "overall")
+                if not isinstance(category, str) or category not in CATEGORIES:
                     raise ValueError()
             except (ValueError, json.JSONDecodeError):
                 self.send_json(400, {"error": "INVALID_BODY"})
@@ -195,7 +234,10 @@ def handler_for(jobs, token):
                 self.send_json(200, {"status": "STOPPING"})
                 threading.Thread(target=self.server.shutdown, daemon=True).start()
             else:
-                self.send_json(202, jobs.start())
+                try:
+                    self.send_json(202, jobs.start(category, keyword_rules))
+                except ValueError as error:
+                    self.send_json(409, {"error": "COLLECTOR_BUSY", "message": str(error)})
 
         def do_OPTIONS(self):
             self.send_json(403, {"error": "FORBIDDEN"})

@@ -167,9 +167,16 @@ describe.sequential("실제 로컬 D1 (Miniflare)", () => {
       "migrations/0002_import_guards.sql",
       "migrations/0003_product_category.sql",
       "migrations/0004_category_replay_guard.sql",
+      "migrations/0005_review_stats.sql",
+      "migrations/0006_review_replay_guard.sql",
+      "migrations/0007_manufacturer_seller.sql",
+      "migrations/0008_manufacturer_replay_guard.sql",
+      "migrations/0009_ingredient_keywords.sql",
+      "migrations/0010_keyword_replay_guard.sql",
+      "migrations/0011_keyword_settings.sql",
     ]) {
       const sql = readFileSync(path, "utf8").replace(/^\s*--.*$/gm, "");
-      for (const statement of (/000[24]/.test(path)
+      for (const statement of (/(?:000[2468]|0010)/.test(path)
         ? sql.match(/CREATE TRIGGER[\s\S]*?\nEND;/g)
         : sql.match(/[^;]+;/g)) || []) {
         const clean = statement.replace(/^\s*--.*$/gm, "").trim();
@@ -180,15 +187,43 @@ describe.sequential("실제 로컬 D1 (Miniflare)", () => {
   afterAll(async () => {
     await mf?.dispose();
   });
+  it("키워드 규칙 기본값, 저장·재조회 및 잘못된 규칙 거부", async () => {
+    const initial = (await (await req("/api/settings/keywords")).json()) as {
+      display: string;
+      includes: string[];
+    }[];
+    expect(initial[0]).toEqual({
+      display: "PDRN",
+      includes: ["PDRN", "피디알엔", "식물성 PDRN"],
+    });
+    const custom = [{ display: "재생", includes: ["PDRN", "피디알엔"] }];
+    expect((await req("/api/settings/keywords", custom)).status).toBe(200);
+    expect(await (await req("/api/settings/keywords")).json()).toEqual(custom);
+    for (const invalid of [
+      [{ display: "", includes: ["a"] }],
+      [{ display: "a", includes: [] }],
+      [...custom, ...custom],
+    ]) {
+      expect((await req("/api/settings/keywords", invalid)).status).toBe(400);
+      expect(await (await req("/api/settings/keywords")).json()).toEqual(
+        custom,
+      );
+    }
+    expect(
+      (await app.request("http://localhost/api/settings/keywords", {}, env()))
+        .status,
+    ).toBe(200);
+    expect((await req("/api/settings/keywords", initial)).status).toBe(200);
+  });
   it("22개 카테고리 seed", async () =>
     expect(
       ((await (await req("/api/categories")).json()) as unknown[]).length,
     ).toBe(22));
-  it("UI/API 비인증 차단 및 위조 JWT 거부", async () => {
+  it("로컬 UI/API는 토큰 없이 열리고 배포 주소는 위조 JWT를 거부", async () => {
     for (const p of ["/", "/api/categories"]) {
       expect(
         (await app.request("http://localhost" + p, {}, env())).status,
-      ).toBe(401);
+      ).toBe(200);
       expect(
         (
           await app.request(
@@ -243,6 +278,19 @@ describe.sequential("실제 로컬 D1 (Miniflare)", () => {
         ).length,
       ).toBe(100);
     }
+  });
+  it("수집 이력은 정렬 순서를 유지하며 이전·다음 페이지로 조회", async () => {
+    const all = (await (await req("/api/imports")).json()) as { id: string }[];
+    expect(all.length).toBeGreaterThanOrEqual(2);
+    const first = (await (
+      await req("/api/imports?offset=0&limit=1")
+    ).json()) as { id: string }[];
+    const second = (await (
+      await req("/api/imports?offset=1&limit=1")
+    ).json()) as { id: string }[];
+    expect(first[0].id).toBe(all[0].id);
+    expect(second[0].id).toBe(all[1].id);
+    expect((await req("/api/imports?offset=0&limit=102")).status).toBe(400);
   });
   it("동일 재업로드 멱등, 변경본 확인 요구", async () => {
     const base = {
@@ -351,7 +399,7 @@ describe.sequential("실제 로컬 D1 (Miniflare)", () => {
       .first<{ id: number }>();
     await db
       .prepare(
-        "INSERT INTO ranking_entries SELECT ?,e.rank,e.product_id,e.brand_name_at_capture,e.product_name_at_capture,e.list_price,e.sale_price,e.product_url_at_capture,e.product_category_at_capture FROM ranking_entries e JOIN snapshots s ON s.id=e.snapshot_id WHERE s.ranking_date='2026-11-03' AND s.is_active=1",
+        "INSERT INTO ranking_entries(snapshot_id,rank,product_id,brand_name_at_capture,product_name_at_capture,list_price,sale_price,product_url_at_capture,product_category_at_capture) SELECT ?,e.rank,e.product_id,e.brand_name_at_capture,e.product_name_at_capture,e.list_price,e.sale_price,e.product_url_at_capture,e.product_category_at_capture FROM ranking_entries e JOIN snapshots s ON s.id=e.snapshot_id WHERE s.ranking_date='2026-11-03' AND s.is_active=1",
       )
       .bind(target!.id)
       .run();
@@ -403,6 +451,12 @@ describe.sequential("실제 로컬 D1 (Miniflare)", () => {
       ...rows[0],
       ranking_date: "2026-10-25",
       product_category: "스킨케어",
+      review_count: 44987,
+      rating: 4.9,
+      manufacturer_name: "(주)코스비전",
+      seller_name: "(주)아모레퍼시픽",
+      manufacturer_disclosure: "(주)코스비전/(주)아모레퍼시픽",
+      keywords: ["세라마이드", "나이아신아마이드"],
     };
     expect(
       (await req(`/api/imports/${id}/chunks`, { rows: [row] })).status,
@@ -424,6 +478,67 @@ describe.sequential("실제 로컬 D1 (Miniflare)", () => {
       .bind(id)
       .first<{ category: string }>();
     expect(saved?.category).toBe("스킨케어");
+    const review = await db
+      .prepare(
+        "SELECT review_count_at_capture count,rating_at_capture rating FROM ranking_entries e JOIN snapshots s ON s.id=e.snapshot_id WHERE s.ingestion_run_id=?",
+      )
+      .bind(id)
+      .first();
+    expect(review).toEqual({ count: 44987, rating: 4.9 });
+    const companies = await db
+      .prepare(
+        "SELECT manufacturer_name_at_capture manufacturer,seller_name_at_capture seller,manufacturer_disclosure_at_capture raw FROM ranking_entries e JOIN snapshots s ON s.id=e.snapshot_id WHERE s.ingestion_run_id=?",
+      )
+      .bind(id)
+      .first();
+    expect(companies).toEqual({
+      manufacturer: "(주)코스비전",
+      seller: "(주)아모레퍼시픽",
+      raw: "(주)코스비전/(주)아모레퍼시픽",
+    });
+    expect(
+      await db
+        .prepare(
+          "SELECT keywords_at_capture keywords FROM ranking_entries e JOIN snapshots s ON s.id=e.snapshot_id WHERE s.ingestion_run_id=?",
+        )
+        .bind(id)
+        .first(),
+    ).toEqual({ keywords: "세라마이드, 나이아신아마이드" });
+    expect(
+      (
+        await req(`/api/imports/${id}/chunks`, {
+          rows: [{ ...row, keywords: ["시카"] }],
+        })
+      ).status,
+    ).toBe(409);
+    expect(
+      (
+        await req(`/api/imports/${id}/chunks`, {
+          rows: [{ ...row, keywords: ["bad,word"] }],
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      (
+        await req(`/api/imports/${id}/chunks`, {
+          rows: [{ ...row, seller_name: "다른 판매업자" }],
+        })
+      ).status,
+    ).toBe(409);
+    expect(
+      (
+        await req(`/api/imports/${id}/chunks`, {
+          rows: [{ ...row, review_count: 44988 }],
+        })
+      ).status,
+    ).toBe(409);
+    expect(
+      (
+        await req(`/api/imports/${id}/chunks`, {
+          rows: [{ ...row, rating: 5.1 }],
+        })
+      ).status,
+    ).toBe(400);
     await req(`/api/imports/${id}/cancel`, {});
   });
 });

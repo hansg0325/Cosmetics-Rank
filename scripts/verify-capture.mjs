@@ -12,9 +12,9 @@ const token = readFileSync(".dev.vars", "utf8")
   .match(/^LOCAL_DEV_TOKEN=(.*)$/m)?.[1]
   .trim();
 const headers = { "x-local-token": token };
-const origin = "http://127.0.0.1:8787";
+const origin = `http://127.0.0.1:${process.env.OLIVERANK_PORT || 8787}`;
 const response = await fetch(
-  `${origin}/api/rankings?date=${encodeURIComponent(capture.ranking_date)}&category=overall`,
+  `${origin}/api/rankings?date=${encodeURIComponent(capture.ranking_date)}&category=${encodeURIComponent(capture.category_code)}`,
   { headers },
 );
 if (!response.ok) throw Error(`조회 오류 ${response.status}`);
@@ -28,6 +28,14 @@ for (const r of capture.rows) {
     stored.brand_name_at_capture !== r.brand_name ||
     stored.product_name_at_capture !== r.product_name ||
     stored.product_url_at_capture !== r.product_url ||
+    (stored.product_category_at_capture ?? "") !== (r.product_category ?? "") ||
+    stored.review_count_at_capture !== (r.review_count ?? null) ||
+    stored.rating_at_capture !== (r.rating ?? null) ||
+    stored.manufacturer_name_at_capture !== (r.manufacturer_name ?? null) ||
+    stored.seller_name_at_capture !== (r.seller_name ?? null) ||
+    stored.manufacturer_disclosure_at_capture !==
+      (r.manufacturer_disclosure ?? null) ||
+    stored.keywords_at_capture !== (r.keywords?.join(", ") ?? null) ||
     stored.list_price !== null ||
     stored.sale_price !== null
   )
@@ -39,7 +47,7 @@ const imports = await importsResponse.json();
 const active = imports.filter(
   (r) =>
     r.ranking_date === capture.ranking_date &&
-    r.category_code === "overall" &&
+    r.category_code === capture.category_code &&
     r.is_active === 1,
 );
 if (

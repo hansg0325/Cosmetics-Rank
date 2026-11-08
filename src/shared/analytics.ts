@@ -9,6 +9,12 @@ export type ChangeEntry = {
   product_name_at_capture: string;
   product_url_at_capture: string;
   product_category_at_capture?: string | null;
+  review_count_at_capture?: number | null;
+  rating_at_capture?: number | null;
+  manufacturer_name_at_capture?: string | null;
+  seller_name_at_capture?: string | null;
+  manufacturer_disclosure_at_capture?: string | null;
+  keywords_at_capture?: string | null;
   list_price?: number | null;
   sale_price?: number | null;
 };
@@ -43,9 +49,26 @@ export type ProductHistory = {
   summary: {
     first_entry_date: string | null;
     best_rank: number | null;
+    worst_rank: number | null;
+    average_rank: number | null;
+    ranked_days: number;
     last_record_date: string | null;
   };
   points: HistoryPoint[];
+};
+export type ProductHistoryTable = {
+  category: string;
+  from: string;
+  to: string;
+  latest_date: string | null;
+  dates: string[];
+  items: {
+    product: ProductSummary;
+    summary: ProductHistory["summary"];
+    current_rank: number | null;
+    points: HistoryPoint[];
+  }[];
+  next_cursor: string | null;
 };
 export type DashboardData = {
   category: string;

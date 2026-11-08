@@ -1,6 +1,10 @@
+import { loadKeywordRules } from "../shared/keywordRules";
 import { Hono } from "hono";
 import { z } from "zod";
-export const collector = new Hono<{ Bindings: { LOCAL_DEV_TOKEN?: string } }>();
+import { collectionCategorySchema } from "../shared/browserCapture";
+export const collector = new Hono<{
+  Bindings: { LOCAL_DEV_TOKEN?: string; DB: D1Database };
+}>();
 collector.use("*", async (c, next) => {
   if (
     !["127.0.0.1", "localhost", "[::1]"].includes(
@@ -18,24 +22,34 @@ collector.use("*", async (c, next) => {
     );
   await next();
 });
-async function callHelper(path: string, token: string, method = "GET") {
+async function callHelper(
+  path: string,
+  token: string,
+  method = "GET",
+  body = {},
+) {
   return fetch("http://127.0.0.1:8790" + path, {
     method,
     headers: {
       Authorization: "Bearer " + token,
       ...(method === "POST" ? { "Content-Type": "application/json" } : {}),
     },
-    ...(method === "POST" ? { body: "{}" } : {}),
+    ...(method === "POST" ? { body: JSON.stringify(body) } : {}),
     signal: AbortSignal.timeout(4000),
     redirect: "manual",
   });
 }
 collector.post("/jobs", async (c) => {
-  z.object({})
+  const input = z
+    .object({ category_code: collectionCategorySchema.default("overall") })
     .strict()
     .parse(await c.req.json());
   try {
-    const r = await callHelper("/jobs", c.env.LOCAL_DEV_TOKEN!, "POST");
+    const r = await callHelper("/jobs", c.env.LOCAL_DEV_TOKEN!, "POST", {
+      ...input,
+      keyword_rules: await loadKeywordRules(c.env.DB),
+    });
+    if (r.status === 409) return c.json(await r.json(), 409);
     if (!r.ok) throw Error("helper unavailable");
     return c.json(await r.json(), 202);
   } catch (error) {

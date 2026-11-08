@@ -1,4 +1,17 @@
 import { z } from "zod";
+export const keywordsSchema = z
+  .array(
+    z
+      .string()
+      .trim()
+      .min(1)
+      .max(100)
+      .refine((s) => !/[,\r\n]/.test(s)),
+  )
+  .max(100)
+  .refine((words) => new Set(words).size === words.length)
+  .nullable()
+  .optional();
 export const day = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -24,7 +37,13 @@ export const rowSchema = z
     brand_name: z.string().max(300).default(""),
     product_name: text,
     product_category: z.string().trim().max(100).optional(),
+    review_count: z.number().int().min(0).max(1e9).nullable().optional(),
+    rating: z.number().min(0).max(5).nullable().optional(),
+    manufacturer_name: z.string().max(10000).nullable().optional(),
+    seller_name: z.string().max(10000).nullable().optional(),
+    manufacturer_disclosure: z.string().max(10000).nullable().optional(),
     product_url: url.default(""),
+    keywords: keywordsSchema,
     list_price: z
       .number()
       .int()

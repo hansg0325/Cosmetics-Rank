@@ -1,3 +1,7 @@
+import {
+  matchesProductSearch,
+  productSearchPlaceholder,
+} from "../shared/productSearch";
 import { useEffect, useState } from "react";
 import type {
   Comparison,
@@ -44,7 +48,11 @@ export function RankingTable({
             <th>브랜드</th>
             <th>카테고리</th>
             <th>상품명</th>
-            <th>원본</th>
+            <th>제조업자, 판매업자</th>
+            <th>키워드</th>
+            <th>리뷰 수</th>
+            <th>평점 (5점)</th>
+            <th>링크</th>
           </tr>
         </thead>
         <tbody>
@@ -64,6 +72,36 @@ export function RankingTable({
                 >
                   {r.product_name_at_capture}
                 </button>
+              </td>
+              <td
+                className="product-detail-column"
+                title={r.manufacturer_disclosure_at_capture || undefined}
+              >
+                {r.manufacturer_disclosure_at_capture || ""}
+              </td>
+              <td
+                className="product-keywords-column"
+                title={
+                  r.keywords_at_capture == null
+                    ? "성분 미수집"
+                    : r.keywords_at_capture === ""
+                      ? "지정 키워드 없음"
+                      : "모든 성분 항목에서 문자열 일치"
+                }
+              >
+                {r.keywords_at_capture || ""}
+              </td>
+              <td>
+                {r.review_count_at_capture == null
+                  ? "미수집"
+                  : `${r.review_count_at_capture.toLocaleString("ko-KR")}건`}
+              </td>
+              <td>
+                {r.rating_at_capture == null
+                  ? r.review_count_at_capture === 0
+                    ? "평가 없음"
+                    : "미수집"
+                  : r.rating_at_capture.toFixed(1)}
               </td>
               <td>
                 {/^https?:\/\//.test(r.product_url_at_capture) && (
@@ -86,14 +124,12 @@ export function RankingTable({
 }
 function SeriesLoader({
   ids,
-  candidates,
   category,
   from,
   to,
   revision,
 }: {
   ids: string[];
-  candidates: ChangeEntry[];
   category: string;
   from: string;
   to: string;
@@ -153,20 +189,11 @@ function SeriesLoader({
   }, [key]); // key contains every request parameter
   if (!valid)
     return <p role="alert">시작일부터 최대 180일 범위를 선택하세요.</p>;
-  if (!ids.length)
-    return <p>비교할 상품을 선택하세요. 최대 30개까지 비교할 수 있습니다.</p>;
+  if (!ids.length) return <p>검색 조건에 맞는 상품이 없습니다.</p>;
   if (state.key !== key)
     return <p role="status">{ids.length}개 상품의 순위 이력을 불러오는 중…</p>;
   if (state.error) return <p role="alert">{state.error}</p>;
-  return (
-    <>
-      <RankChart series={state.series} />
-      <p className="muted">
-        선택 상품 {candidates.filter((r) => ids.includes(r.product_id)).length}
-        개 · 미수집과 100위권 밖은 날짜별 데이터에서 구분합니다.
-      </p>
-    </>
-  );
+  return <RankChart series={state.series} />;
 }
 export function RankingsPanel({
   categories,
@@ -184,8 +211,7 @@ export function RankingsPanel({
   const [category, setCategory] = useState("overall"),
     [chosenDate, setDate] = useState(""),
     [search, setSearch] = useState(""),
-    [filter, setFilter] = useState("ALL"),
-    [picker, setPicker] = useState("");
+    [filter, setFilter] = useState("ALL");
   const dates = useData<{ dates: string[] }>(
     "dates?" + params({ category, v: revision }),
   );
@@ -193,23 +219,16 @@ export function RankingsPanel({
   const data = useData<Comparison>(
     date ? "changes?" + params({ date, category, v: revision }) : null,
   );
-  const [selection, setSelection] = useState<{ key: string; ids: string[] }>({
-      key: "",
-      ids: [],
-    }),
-    [range, setRange] = useState<{ key: string; from: string; to: string }>({
-      key: "",
-      from: "",
-      to: "",
-    });
+  const [range, setRange] = useState<{ key: string; from: string; to: string }>(
+    { key: "", from: "", to: "" },
+  );
   const key = category + "/" + date + "/" + (data.data?.snapshot_id ?? "none");
   const candidates = data.data?.items || [];
-  const defaults = candidates
-    .filter((r) => r.rank !== null)
+  const ids = candidates
+    .filter((r) => r.rank !== null && matchesProductSearch(r, search))
     .sort((a, b) => a.rank! - b.rank!)
     .slice(0, 30)
     .map((r) => r.product_id);
-  const ids = selection.key === key ? selection.ids : defaults;
   const earliest = dates.data?.dates.filter((d) => d <= date).at(-1);
   const defaultFrom = date ? shiftDay(date, -13) : "";
   const from =
@@ -224,132 +243,143 @@ export function RankingsPanel({
     .filter(
       (r) =>
         (analysis || r.rank !== null) &&
-        (!needle ||
-          (r.brand_name_at_capture + " " + r.product_name_at_capture)
-            .toLowerCase()
-            .includes(needle)) &&
+        matchesProductSearch(r, needle) &&
         (filter === "ALL" || r.movement === filter),
     )
     .sort((a, b) => (a.rank ?? 101) - (b.rank ?? 101));
   return (
     <>
-      <article>
-        <div className="card-title">
-          <h2>
-            {chartOnly
-              ? "순위 변동 조회"
-              : analysis
-                ? "직전 수집일 대비 분석"
-                : "날짜별 랭킹"}
-          </h2>
-          <span>완료된 활성 기록만 표시</span>
-        </div>
-        <div className="ranking-filters">
-          <label>
-            카테고리{" "}
-            <select
-              value={category}
-              onChange={(e) => {
-                setCategory(e.target.value);
-                setDate("");
-                setFilter("ALL");
-              }}
-            >
-              {categories.map((c) => (
-                <option key={c.code} value={c.code}>
-                  {c.display_name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            날짜{" "}
-            <input
-              aria-label="랭킹 날짜"
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-            />
-          </label>
-          <label>
-            상품명·브랜드{" "}
-            <input
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="상품명 또는 브랜드 검색"
-            />
-          </label>
-          <label>
-            변동{" "}
-            <select value={filter} onChange={(e) => setFilter(e.target.value)}>
-              {[
-                ["ALL", "전체"],
-                ["UP", "상승"],
-                ["DOWN", "하락"],
-                ["SAME", "동일"],
-                ["NEW", "신규 진입"],
-                ...(analysis ? [["EXIT", "이탈"]] : []),
-              ].map(([v, t]) => (
-                <option key={v} value={v}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        {(data.error || dates.error) && (
-          <p role="alert">{data.error || dates.error}</p>
-        )}
-        {(data.loading || dates.loading) && (
-          <p role="status">랭킹을 불러오는 중…</p>
-        )}
-        {data.data && (
-          <>
-            <p>
-              {data.data.compared_to
-                ? `직전 수집 성공일 ${data.data.compared_to} 대비`
-                : "이전 수집 기록이 없어 등락을 비교하지 않습니다."}
-              {data.data.missing_days > 0 &&
-                ` · 중간 ${data.data.missing_days}일 미수집`}
-            </p>
-            <div className="change-stats">
-              {(["UP", "DOWN", "NEW", "EXIT"] as const).map((m) => (
-                <span key={m}>
-                  {{ UP: "상승", DOWN: "하락", NEW: "신규", EXIT: "이탈" }[m]}{" "}
-                  <b>{data.data!.counts[m]}</b>
-                </span>
-              ))}
-            </div>
-            {!data.data.has_snapshot ? (
-              <p className="empty">
-                선택한 날짜에 완료된 수집 기록이 없습니다.
-              </p>
-            ) : (
-              <>
-                <p role="status">{items.length}개 상품</p>
-                {!chartOnly && (
-                  <RankingTable
-                    items={items}
-                    category={category}
-                    onProduct={onProduct}
-                  />
-                )}
-              </>
-            )}
-          </>
-        )}
-        {!date && !dates.loading && !dates.error && (
-          <p className="empty">이 카테고리에는 수집 기록이 없습니다.</p>
-        )}
-      </article>
-      {chartOnly && data.data?.has_snapshot && (
+      {!chartOnly && (
+        <article>
+          <div className="card-title">
+            <h2>
+              {chartOnly
+                ? "순위 변동 조회"
+                : analysis
+                  ? "직전 수집일 대비 분석"
+                  : "날짜별 랭킹"}
+            </h2>
+          </div>
+          <div className="ranking-filters">
+            <label>
+              카테고리{" "}
+              <select
+                value={category}
+                onChange={(e) => {
+                  setCategory(e.target.value);
+                  setDate("");
+                  setFilter("ALL");
+                }}
+              >
+                {categories.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.display_name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              날짜{" "}
+              <input
+                aria-label="랭킹 날짜"
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+              />
+            </label>
+            <label>
+              검색{" "}
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={productSearchPlaceholder}
+              />
+            </label>
+            <label>
+              변동{" "}
+              <select
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+              >
+                {[
+                  ["ALL", "전체"],
+                  ["UP", "상승"],
+                  ["DOWN", "하락"],
+                  ["SAME", "동일"],
+                  ["NEW", "신규 진입"],
+                  ...(analysis ? [["EXIT", "이탈"]] : []),
+                ].map(([v, t]) => (
+                  <option key={v} value={v}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {(data.error || dates.error) && (
+            <p role="alert">{data.error || dates.error}</p>
+          )}
+          {(data.loading || dates.loading) && (
+            <p role="status">랭킹을 불러오는 중…</p>
+          )}
+          {data.data && (
+            <>
+              <div className="change-stats">
+                {(["UP", "DOWN", "NEW", "EXIT"] as const).map((m) => (
+                  <span key={m}>
+                    {{ UP: "상승", DOWN: "하락", NEW: "신규", EXIT: "이탈" }[m]}{" "}
+                    <b>{data.data!.counts[m]}</b>
+                  </span>
+                ))}
+              </div>
+              {!data.data.has_snapshot ? (
+                <p className="empty">
+                  선택한 날짜에 완료된 수집 기록이 없습니다.
+                </p>
+              ) : (
+                <>
+                  {!chartOnly && (
+                    <RankingTable
+                      items={items}
+                      category={category}
+                      onProduct={onProduct}
+                    />
+                  )}
+                </>
+              )}
+            </>
+          )}
+          {!date && !dates.loading && !dates.error && (
+            <p className="empty">이 카테고리에는 수집 기록이 없습니다.</p>
+          )}
+        </article>
+      )}
+      {chartOnly && (
         <article>
           <div className="card-title">
             <h2>상품별 순위 변동 비교</h2>
             <span>최대 30개 · 최대 180일</span>
           </div>
           <div className="ranking-filters">
+            <label>
+              카테고리{" "}
+              <select
+                aria-label="순위 변동 카테고리"
+                value={category}
+                onChange={(e) => {
+                  setCategory(e.target.value);
+                  setDate("");
+                  setSearch("");
+                }}
+              >
+                {categories.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.display_name}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label>
               시작일{" "}
               <input
@@ -366,52 +396,32 @@ export function RankingsPanel({
                 onChange={(e) => setRange({ key, from, to: e.target.value })}
               />
             </label>
+            <label>
+              검색{" "}
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={productSearchPlaceholder}
+              />
+            </label>
           </div>
-          <details className="series-picker">
-            <summary>비교 상품 선택 ({ids.length}/30)</summary>
-            <input
-              aria-label="비교 상품 검색"
-              type="search"
-              placeholder="비교할 상품 찾기"
-              value={picker}
-              onChange={(e) => setPicker(e.target.value)}
+          {(data.error || dates.error) && (
+            <p role="alert">{data.error || dates.error}</p>
+          )}
+          {data.loading || dates.loading ? (
+            <p role="status">순위 이력을 불러오는 중…</p>
+          ) : !data.data?.has_snapshot ? (
+            <p className="empty">수집 기록이 없습니다.</p>
+          ) : (
+            <SeriesLoader
+              ids={ids}
+              category={category}
+              from={from}
+              to={to}
+              revision={revision}
             />
-            <div className="picker-options">
-              {candidates
-                .filter((r) =>
-                  (r.brand_name_at_capture + " " + r.product_name_at_capture)
-                    .toLowerCase()
-                    .includes(picker.toLowerCase()),
-                )
-                .map((r) => (
-                  <label key={r.product_id}>
-                    <input
-                      type="checkbox"
-                      checked={ids.includes(r.product_id)}
-                      disabled={!ids.includes(r.product_id) && ids.length >= 30}
-                      onChange={(e) =>
-                        setSelection({
-                          key,
-                          ids: e.target.checked
-                            ? [...ids, r.product_id]
-                            : ids.filter((x) => x !== r.product_id),
-                        })
-                      }
-                    />
-                    {r.rank ?? "이탈"} · {r.brand_name_at_capture}{" "}
-                    {r.product_name_at_capture}
-                  </label>
-                ))}
-            </div>
-          </details>
-          <SeriesLoader
-            ids={ids}
-            candidates={candidates}
-            category={category}
-            from={from}
-            to={to}
-            revision={revision}
-          />
+          )}
         </article>
       )}
     </>

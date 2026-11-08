@@ -1,0 +1,52 @@
+{
+  "overall": {
+    "name": "전체",
+    "tab_id": "",
+    "source_url": "https://www.oliveyoung.co.kr/store/main/getBestList.do"
+  },
+  "skincare": {
+    "name": "스킨케어",
+    "tab_id": "10000010001",
+    "source_url": "https://www.oliveyoung.co.kr/store/main/getBestList.do?dispCatNo=900000100100001&fltDispCatNo=10000010001"
+  },
+  "maskpack": {
+    "name": "마스크팩",
+    "tab_id": "10000010009",
+    "source_url": "https://www.oliveyoung.co.kr/store/main/getBestList.do?dispCatNo=900000100100001&fltDispCatNo=10000010009"
+  },
+  "cleansing": {
+    "name": "클렌징",
+    "tab_id": "10000010010",
+    "source_url": "https://www.oliveyoung.co.kr/store/main/getBestList.do?dispCatNo=900000100100001&fltDispCatNo=10000010010"
+  },
+  "suncare": {
+    "name": "선케어",
+    "tab_id": "10000010011",
+    "source_url": "https://www.oliveyoung.co.kr/store/main/getBestList.do?dispCatNo=900000100100001&fltDispCatNo=10000010011"
+  },
+  "makeup": {
+    "name": "메이크업",
+    "tab_id": "10000010002",
+    "source_url": "https://www.oliveyoung.co.kr/store/main/getBestList.do?dispCatNo=900000100100001&fltDispCatNo=10000010002"
+  },
+  "dermocosmetics": {
+    "name": "더모 코스메틱",
+    "tab_id": "10000010008",
+    "source_url": "https://www.oliveyoung.co.kr/store/main/getBestList.do?dispCatNo=900000100100001&fltDispCatNo=10000010008"
+  },
+  "haircare": {
+    "name": "헤어케어",
+    "tab_id": "10000010004",
+    "source_url": "https://www.oliveyoung.co.kr/store/main/getBestList.do?dispCatNo=900000100100001&fltDispCatNo=10000010004"
+  },
+  "bodycare": {
+    "name": "바디케어",
+    "tab_id": "10000010003",
+    "source_url": "https://www.oliveyoung.co.kr/store/main/getBestList.do?dispCatNo=900000100100001&fltDispCatNo=10000010003"
+  },
+  "mens_edit": {
+    "name": "맨즈에딧",
+    "tab_id": "10000060002",
+    "source_url": "https://www.oliveyoung.co.kr/store/main/getBestList.do?dispCatNo=900000100100001&fltDispCatNo=10000060002"
+  }
+}

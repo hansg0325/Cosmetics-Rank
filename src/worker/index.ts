@@ -1,3 +1,4 @@
+import { loadKeywordRules, keywordRulesSchema } from "../shared/keywordRules";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { createRemoteJWKSet, jwtVerify } from "jose";
@@ -19,31 +20,9 @@ const keysets = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 app.use("*", async (c, next) => {
   const url = new URL(c.req.url);
   const local = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
-  if (
-    local &&
-    c.env.LOCAL_DEV_TOKEN &&
-    url.pathname === "/local-login" &&
-    c.req.method === "POST"
-  ) {
-    if (c.req.header("origin") !== url.origin) return c.text("Forbidden", 403);
-    const body = await c.req.parseBody();
-    if (body.token !== c.env.LOCAL_DEV_TOKEN)
-      return c.text("Unauthorized", 401);
-    c.header(
-      "Set-Cookie",
-      `olive_local=${encodeURIComponent(c.env.LOCAL_DEV_TOKEN)}; HttpOnly; SameSite=Strict; Path=/`,
-    );
-    return c.redirect("/");
-  }
-  const token =
-    c.req.header("x-local-token") ||
-    (c.req.header("cookie") || "")
-      .split(";")
-      .map((s) => s.trim())
-      .find((s) => s.startsWith("olive_local="))
-      ?.slice(12);
-  let authorized =
-    local && !!c.env.LOCAL_DEV_TOKEN && token === c.env.LOCAL_DEV_TOKEN;
+  // The desktop-only server binds to loopback. Its helper still uses the
+  // internal token, but opening the local UI requires no login.
+  let authorized = local && !!c.env.LOCAL_DEV_TOKEN;
   if (
     !authorized &&
     c.env.ACCESS_TEAM &&
@@ -69,16 +48,6 @@ app.use("*", async (c, next) => {
     }
   }
   if (!authorized) {
-    if (
-      local &&
-      c.env.LOCAL_DEV_TOKEN &&
-      c.req.method === "GET" &&
-      url.pathname === "/"
-    )
-      return c.html(
-        '<!doctype html><html lang="ko"><meta charset="utf-8"><title>OliveRank 로컬 로그인</title><h1>OliveRank 로컬 로그인</h1><form method="post" action="/local-login"><label>개발 토큰 <input name="token" type="password" required></label><button>접속</button></form></html>',
-        401,
-      );
     return c.json({ error: "UNAUTHORIZED" }, 401);
   }
   if (c.req.method === "POST" && c.req.header("origin") !== url.origin)
@@ -102,6 +71,18 @@ app.onError((err, c) => {
   return c.json({ error: "IMPORT_CONFLICT_OR_DATABASE_ERROR" }, 409);
 });
 app.get("/api/health", (c) => c.json({ ok: true, schedule: scheduleStatus }));
+app.get("/api/settings/keywords", async (c) =>
+  c.json(await loadKeywordRules(c.env.DB)),
+);
+app.post("/api/settings/keywords", async (c) => {
+  const rules = keywordRulesSchema.parse(await c.req.json());
+  await c.env.DB.prepare(
+    "INSERT INTO app_settings(key,value) VALUES('ingredient_keyword_rules',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+  )
+    .bind(JSON.stringify(rules))
+    .run();
+  return c.json({ saved: true });
+});
 app.route("/api/collector", collector);
 app.get("/api/categories", async (c) =>
   c.json(
@@ -119,12 +100,18 @@ app.get("/api/imports", async (c) => {
     .min(0)
     .max(100000)
     .parse(c.req.query("offset") || 0);
+  const limit = z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(101)
+    .parse(c.req.query("limit") || 100);
   return c.json(
     (
       await c.env.DB.prepare(
-        "SELECT r.*,s.id snapshot_id,s.ranking_date,s.category_code,s.status snapshot_status,s.entry_count,s.is_active FROM ingestion_runs r JOIN snapshots s ON s.ingestion_run_id=r.id ORDER BY r.started_at DESC,r.id LIMIT 100 OFFSET ?",
+        "SELECT r.*,s.id snapshot_id,s.ranking_date,s.collected_at,s.category_code,s.status snapshot_status,s.entry_count,s.is_active FROM ingestion_runs r JOIN snapshots s ON s.ingestion_run_id=r.id ORDER BY r.started_at DESC,r.id LIMIT ? OFFSET ?",
       )
-        .bind(offset)
+        .bind(limit, offset)
         .all()
     ).results,
   );
@@ -220,7 +207,7 @@ app.post("/api/imports/:id/chunks", async (c) => {
         .bind(r.product_id, r.brand_name, r.product_name, r.product_url),
       db
         .prepare(
-          "INSERT INTO ranking_entries(snapshot_id,rank,product_id,brand_name_at_capture,product_name_at_capture,list_price,sale_price,product_url_at_capture,product_category_at_capture) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(snapshot_id,rank) DO NOTHING",
+          "INSERT INTO ranking_entries(snapshot_id,rank,product_id,brand_name_at_capture,product_name_at_capture,list_price,sale_price,product_url_at_capture,product_category_at_capture,review_count_at_capture,rating_at_capture,manufacturer_name_at_capture,seller_name_at_capture,manufacturer_disclosure_at_capture,keywords_at_capture) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(snapshot_id,rank) DO NOTHING",
         )
         .bind(
           s.id,
@@ -232,6 +219,12 @@ app.post("/api/imports/:id/chunks", async (c) => {
           null,
           r.product_url,
           r.product_category || null,
+          r.review_count ?? null,
+          r.rating ?? null,
+          r.manufacturer_name ?? null,
+          r.seller_name ?? null,
+          r.manufacturer_disclosure ?? null,
+          r.keywords?.join(", ") ?? null,
         ),
     );
   }

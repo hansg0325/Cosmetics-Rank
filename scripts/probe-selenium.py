@@ -12,6 +12,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
+from product_taxonomy import product_top_category
+from manufacturer_info import enrich_product_details
 
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
@@ -36,6 +38,17 @@ def emit(value):
 
 def extract(driver, kind, source):
     if kind == "overall":
+        expected_tab = parse_qs(urlsplit(source).query).get("fltDispCatNo", [""])[0]
+        selected = driver.execute_script("""
+          return Array.from(document.querySelectorAll('#Container li.on > button[title="선택됨"]'))
+            .map(e=>({id:e.getAttribute('data-ref-dispcatno')||'',text:e.textContent.trim()}));
+        """)
+        category_matches = any(
+            item["id"] == expected_tab and (bool(expected_tab) or item["text"] == "전체")
+            for item in selected
+        )
+        actual_page = urlsplit(driver.current_url)
+        category_matches = category_matches and actual_page.netloc == "www.oliveyoung.co.kr" and actual_page.path == "/store/main/getBestList.do" and parse_qs(actual_page.query).get("fltDispCatNo", [""])[0] == expected_tab
         rows = driver.execute_script("""
           return Array.from(document.querySelectorAll('#Container .cate_prd_list .prd_info')).map(card=>{
             const href=card.querySelector('.prd_name a')?.getAttribute('href');
@@ -43,17 +56,19 @@ def extract(driver, kind, source):
             return {rank:Number(card.querySelector('.thumb_flag.best')?.textContent.trim()),
               product_id:id,brand_name:card.querySelector('.tx_brand')?.textContent.trim()||'',
               product_name:card.querySelector('.tx_name')?.textContent.trim()||'',
-              product_category:(card.querySelector('[data-ref-goodscategory]')?.getAttribute('data-ref-goodscategory')||'').split('>').map(s=>s.trim()).filter(Boolean).filter(s=>!/^\\d+$/.test(s))[0]||'',
+              product_category:card.querySelector('[data-ref-goodscategory]')?.getAttribute('data-ref-goodscategory')||'',
               product_url:id?'https://www.oliveyoung.co.kr/store/goods/getGoodsDetail.do?goodsNo='+encodeURIComponent(id):''};
           });
         """)
+        for row in rows:
+            row["product_category"] = product_top_category(row["product_category"])
         valid = (
-            len(rows) == 100
+            category_matches and len(rows) == 100
             and sorted(r["rank"] for r in rows) == list(range(1, 101))
             and len({r["product_id"] for r in rows}) == 100
             and all(r["product_id"] and r["brand_name"] and r["product_name"] for r in rows)
         )
-        return {"valid": valid, "product_count": len(rows), "products": rows}
+        return {"valid": valid, "product_count": len(rows), "products": rows, "category_matches": category_matches}
 
     def first_text(candidates):
         for by, selector in candidates:
@@ -89,6 +104,7 @@ def probe(kind, source, chrome_binary):
     options = webdriver.ChromeOptions()
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
+    options.page_load_strategy = "eager"
     options.add_argument(f"user-agent={USER_AGENT}")
     if chrome_binary:
         options.binary_location = chrome_binary
@@ -114,6 +130,8 @@ def probe(kind, source, chrome_binary):
             except TimeoutException:
                 pass
         result = extract(driver, kind, source)
+        if kind == "overall" and result["valid"]:
+            enrich_product_details(driver, result["products"])
         if kind == "product" and not result["valid"]:
             result["selector_diagnostics"] = driver.execute_script("""
               const expected=document.title.replace(/\\s*\\|\\s*올리브영.*$/,'').trim();

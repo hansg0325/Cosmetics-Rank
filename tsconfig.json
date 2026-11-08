@@ -10,7 +10,8 @@
     "skipLibCheck": true,
     "types": ["@cloudflare/workers-types", "node"],
     "noEmit": true,
-    "allowJs": true
+    "allowJs": true,
+    "resolveJsonModule": true
   },
   "include": ["src", "tests", "*.ts", "extension"]
 }

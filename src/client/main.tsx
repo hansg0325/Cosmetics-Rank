@@ -1,3 +1,8 @@
+import { formatCollectedAt } from "../shared/dateTime";
+import { AdminExport } from "./AdminExport";
+import { useData } from "./analyticsApi";
+import { MarketSharePanel } from "./MarketSharePanel";
+import { KeywordSettings } from "./KeywordSettings";
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { RankingRow } from "../shared/schemas";
@@ -7,9 +12,14 @@ import { RankingsPanel } from "./RankingsPanel";
 import { ProductHistoryPanel } from "./ProductHistoryPanel";
 import { DashboardPanel } from "./DashboardPanel";
 import { collectRankings } from "./collector";
+import {
+  collectionCategories,
+  type CollectionCategory,
+} from "../shared/browserCapture";
 type Run = {
   id: string;
   ranking_date: string;
+  collected_at?: string | null;
   category_code: string;
   status: string;
   entry_count: number;
@@ -48,20 +58,35 @@ function App() {
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false),
     [runs, setRuns] = useState<Run[]>([]),
+    [runPage, setRunPage] = useState(0),
+    [runsLoading, setRunsLoading] = useState(false),
+    [hasNextRuns, setHasNextRuns] = useState(false),
     [categories, setCategories] = useState<
       { code: string; display_name: string }[]
     >([]);
+  const loadRuns = async (index: number) => {
+    setRunsLoading(true);
+    try {
+      const rows = await api<Run[]>(`imports?offset=${index * 20}&limit=21`);
+      setRuns(rows.slice(0, 20));
+      setHasNextRuns(rows.length > 20);
+      setRunPage(index);
+    } finally {
+      setRunsLoading(false);
+    }
+  };
   const refresh = async () => {
-    setRuns(await api<Run[]>("imports"));
-    setCategories(
-      await api<{ code: string; display_name: string }[]>("categories"),
-    );
+    await Promise.all([
+      loadRuns(runPage),
+      api<{ code: string; display_name: string }[]>("categories").then(
+        setCategories,
+      ),
+    ]);
   };
   useEffect(() => {
     refresh().catch((e) => setMessage(String(e)));
   }, []);
   async function upload(inputRows: RankingRow[], inputCapture: BrowserCapture) {
-    setBusy(true);
     let current: string | undefined;
     try {
       const groups = new Map<string, RankingRow[]>();
@@ -116,18 +141,62 @@ function App() {
         );
       setMessage(String(e));
       await refresh();
-    } finally {
-      setBusy(false);
+      throw e;
     }
   }
   async function collectNow() {
     if (busy || collectionLock.current) return;
     collectionLock.current = true;
     setBusy(true);
-    setMessage("Chrome에서 전체 랭킹을 불러오는 중…");
+    setMessage("전체 카테고리 랭킹을 불러오는 중…");
     try {
-      const parsed = await collectRankings(setMessage);
-      await upload(parsed.rows, parsed.capture);
+      const targets = Object.keys(collectionCategories) as CollectionCategory[];
+      const failed: string[] = [];
+      let completed = 0;
+      const coverage = {
+        total: 0,
+        manufacturers: 0,
+        sellers: 0,
+        ingredients: 0,
+        reviews: 0,
+        ratings: 0,
+      };
+      for (const [index, category] of targets.entries()) {
+        const name = collectionCategories[category].name;
+        try {
+          const parsed = await collectRankings(
+            (text) => setMessage(`${index + 1}/${targets.length} · ${text}`),
+            category,
+          );
+          await upload(parsed.rows, parsed.capture);
+          completed++;
+          for (const field of Object.keys(
+            coverage,
+          ) as (keyof typeof coverage)[]) {
+            coverage[field] +=
+              parsed.coverage?.[field] ??
+              (field === "total"
+                ? parsed.rows.length
+                : parsed.rows.filter(
+                    (r) =>
+                      (field === "manufacturers"
+                        ? r.manufacturer_name
+                        : field === "sellers"
+                          ? r.seller_name
+                          : field === "ingredients"
+                            ? r.keywords
+                            : field === "reviews"
+                              ? r.review_count
+                              : r.rating) != null,
+                  ).length);
+          }
+        } catch (error) {
+          failed.push(`${name}: ${String(error)}`);
+        }
+      }
+      setMessage(
+        `${targets.length}개 카테고리 취합 완료 · 성공 ${completed}개 (${completed * 100}행) · 실패 ${failed.length}개${failed.length ? " · " + failed.join(" / ") : ""} · 제조업자 ${coverage.manufacturers}/${coverage.total} · 판매업자 ${coverage.sellers}/${coverage.total} · 성분 ${coverage.ingredients}/${coverage.total} · 리뷰 수 ${coverage.reviews}/${coverage.total} · 평점 ${coverage.ratings}/${coverage.total}`,
+      );
     } catch (error) {
       setMessage(String(error));
     } finally {
@@ -135,13 +204,19 @@ function App() {
       setBusy(false);
     }
   }
-  const complete = runs.filter((r) => r.status === "COMPLETE");
   const revision = runs
     .map((r) => r.id + ":" + r.status + ":" + r.is_active)
     .join("|")
     .split("")
     .reduce((n, c) => (Math.imul(n, 31) + c.charCodeAt(0)) | 0, 0)
     .toString(36);
+  const collectionStatus = useData<{ latest_collected_at: string | null }>(
+    "collection-status?v=" + revision,
+  );
+  const lastCollected = collectionStatus.data?.latest_collected_at;
+  const lastCollectedDate = lastCollected
+    ? formatCollectedAt(lastCollected)
+    : null;
   const openProduct = (id: string, category: string) => {
     setProductId(id);
     setProductCategory(category);
@@ -150,130 +225,71 @@ function App() {
   };
   return (
     <div className="shell">
-      <aside>
+      <header className="app-header">
         <a className="logo" href="/">
-          olive<span>rank</span>
-          <small>나만의 랭킹 아카이브</small>
+          cosmetics <span>rank</span>
         </a>
-        <nav>
+        <nav aria-label="주 메뉴">
           {[
             "대시보드",
             "랭킹",
-            "분석",
             "순위 변동",
             "상품 이력",
-            "내보내기",
+            "점유율 분석",
             "설정",
+            "관리자",
           ].map((p) => (
             <button
               key={p}
               className={p === page ? "selected" : ""}
+              aria-current={p === page ? "page" : undefined}
               onClick={() => setPage(p)}
             >
               {p}
             </button>
           ))}
         </nav>
-        <div className="aside-foot">
-          PRIVATE WORKSPACE
-          <br />
-          개인 랭킹 기록
+        <div className="app-last-collection" aria-label="최근 수집일">
+          <span>최근 수집일</span>
+          <b>
+            {collectionStatus.error
+              ? "조회 실패"
+              : collectionStatus.loading
+                ? "확인 중"
+                : lastCollectedDate || "수집 기록 없음"}
+          </b>
         </div>
-      </aside>
+      </header>
       <main>
-        <header>
-          <span>개인 데이터 워크스페이스</span>
-          <span>
-            {new Intl.DateTimeFormat("ko-KR", {
-              timeZone: "Asia/Seoul",
-              dateStyle: "long",
-            }).format(new Date())}{" "}
-            KST
-          </span>
-        </header>
-        <section className="heading">
-          <p className="eyebrow">OLIVERANK / OVERVIEW</p>
-          <h1>{page}</h1>
-          <p>매일의 순위를, 오래 남는 기록으로.</p>
-        </section>
-        <div className="notice">
-          <span className="dot" />
-          예약 수집 비활성화 · 버튼으로 전체 랭킹을 수집합니다.
-          <small>DISABLED_NO_APPROVED_SOURCE</small>
-        </div>
         <p role="status" className="message">
           {message}
         </p>
         {page === "대시보드" && (
+          <DashboardPanel onProduct={openProduct} revision={revision} />
+        )}
+        {page === "관리자" && (
           <article>
-            <h2>실제 전체 랭킹 수집</h2>
-            <p>
-              버튼을 누르면 이 PC에서 Chrome을 실행해 100개를 읽고 바로
-              저장합니다. 가격과 이미지는 제외합니다. 같은 날의 변경된 기록은 새
-              버전으로 저장하며 이전 버전은 보존합니다.
-            </p>
+            <h2>랭킹 데이터 수집</h2>
             <button
               className="primary"
               disabled={busy}
               onClick={() => void collectNow()}
             >
-              {busy ? "수집·저장 중…" : "지금 수집하고 저장"}
-            </button>{" "}
-            <a
-              href="/collector-help.html"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              수집 실행 안내
-            </a>
+              {busy ? "데이터 수집 중…" : "데이터 수집"}
+            </button>
           </article>
         )}
-        {page === "대시보드" && (
-          <>
-            <div className="stats">
-              <article>
-                <label>완료 스냅샷 · 최근 100건</label>
-                <strong>{complete.length}</strong>
-                <small>검증된 날짜별 기록</small>
-              </article>
-              <article>
-                <label>등록 카테고리</label>
-                <strong>{categories.length}</strong>
-                <small>제공 스키마 기준</small>
-              </article>
-              <article>
-                <label>데이터 입력 방식</label>
-                <strong className="text-value">버튼 수집</strong>
-                <small>Chrome 자동 실행 · 전체 랭킹 수집</small>
-              </article>
-            </div>
-            <DashboardPanel
-              categories={categories}
-              onProduct={openProduct}
-              revision={revision}
-            />
-          </>
-        )}
-        {page === "설정" && (
-          <article>
-            <h2>무료 · 비공개 운영</h2>
-            <p>
-              허가된 자동 데이터 공급자는 연결되지 않았습니다. 로컬 인증으로
-              기능을 검증하고, 실제 배포 전 Cloudflare Access에서 본인만
-              허용해야 합니다.
-            </p>
-            <p>
-              활성 카테고리: {categories.map((c) => c.display_name).join(", ")}
-            </p>
-          </article>
-        )}
-        {(page === "랭킹" || page === "분석" || page === "순위 변동") && (
+        {page === "관리자" && <AdminExport disabled={busy} />}
+        {page === "점유율 분석" && <MarketSharePanel revision={revision} />}
+        {page === "설정" && <KeywordSettings />}
+        {["랭킹", "순위 변동"].includes(page) && (
           <RankingsPanel
             key={page}
-            categories={categories}
+            categories={categories.filter((category) =>
+              Object.hasOwn(collectionCategories, category.code),
+            )}
             onProduct={openProduct}
             revision={revision}
-            analysis={page === "분석"}
             chartOnly={page === "순위 변동"}
           />
         )}
@@ -283,24 +299,10 @@ function App() {
             productId={productId}
             initialCategory={productCategory}
             categories={categories}
-            onProduct={openProduct}
             revision={revision}
           />
         )}
-        {![
-          "대시보드",
-          "설정",
-          "랭킹",
-          "분석",
-          "순위 변동",
-          "상품 이력",
-        ].includes(page) && (
-          <article>
-            <h2>후속 단계에서 구현할 화면입니다</h2>
-            <p>내보내기는 다음 단계에서 추가합니다.</p>
-          </article>
-        )}
-        {page === "대시보드" && (
+        {page === "관리자" && (
           <article>
             <div className="card-title">
               <h2>최근 수집 이력</h2>
@@ -317,7 +319,7 @@ function App() {
               <table>
                 <thead>
                   <tr>
-                    <th>날짜</th>
+                    <th>수집 일시 (KST)</th>
                     <th>카테고리</th>
                     <th>저장 행</th>
                     <th>상태</th>
@@ -328,7 +330,7 @@ function App() {
                 <tbody>
                   {runs.map((r) => (
                     <tr key={r.id}>
-                      <td>{r.ranking_date}</td>
+                      <td>{formatCollectedAt(r.collected_at)}</td>
                       <td>{r.category_code}</td>
                       <td>{r.entry_count}/100</td>
                       <td>
@@ -361,16 +363,35 @@ function App() {
                   ))}
                 </tbody>
               </table>
-              {!runs.length && (
+              {!runs.length && runPage === 0 && !runsLoading && (
                 <p className="empty">아직 수집한 데이터가 없습니다.</p>
               )}
             </div>
+            <div className="pagination">
+              <button
+                disabled={runPage === 0 || runsLoading}
+                onClick={() =>
+                  void loadRuns(runPage - 1).catch((e) =>
+                    setMessage(String(e)),
+                  )
+                }
+              >
+                이전
+              </button>
+              <span>{runPage + 1}페이지</span>
+              <button
+                disabled={!hasNextRuns || runsLoading}
+                onClick={() =>
+                  void loadRuns(runPage + 1).catch((e) =>
+                    setMessage(String(e)),
+                  )
+                }
+              >
+                다음
+              </button>
+            </div>
           </article>
         )}
-        <footer>
-          OliveRank · 브라우저에서 가져온 실제 랭킹과 가상 샘플은 별도 출처로
-          기록합니다.
-        </footer>
       </main>
     </div>
   );

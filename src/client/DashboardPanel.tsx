@@ -1,135 +1,96 @@
-import { useState } from "react";
-import type { DashboardData } from "../shared/analytics";
+import type { CategoryLeader } from "../shared/dashboardLeaders";
 import { params, useData } from "./analyticsApi";
-import { RankingTable, type Category, type OpenProduct } from "./RankingsPanel";
+import type { OpenProduct } from "./RankingsPanel";
+
 export function DashboardPanel({
-  categories,
   onProduct,
   revision,
 }: {
-  categories: Category[];
   onProduct: OpenProduct;
   revision: string;
 }) {
-  const [category, setCategory] = useState("overall");
-  const data = useData<DashboardData>(
-    "dashboard?" + params({ category, v: revision }),
+  const data = useData<CategoryLeader[]>(
+    "dashboard/leaders?" + params({ v: revision }),
   );
-  const d = data.data;
+  const leaders = data.data || [];
+  function movement(row: CategoryLeader) {
+    if (!row.product)
+      return <span className="movement movement-UNCOMPARED">—</span>;
+    if (!row.compared_to)
+      return <span className="movement movement-UNCOMPARED">비교 없음</span>;
+    const previous = row.product.previous_rank;
+    if (previous == null)
+      return <span className="movement movement-NEW">NEW</span>;
+    return previous === 1 ? (
+      <span className="movement movement-SAME">—</span>
+    ) : (
+      <span className="movement movement-UP">▲ {previous - 1}</span>
+    );
+  }
   return (
-    <>
-      <article>
-        <div className="card-title">
-          <h2>랭킹 현황</h2>
-          <label>
-            카테고리{" "}
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-            >
-              {categories.map((c) => (
-                <option key={c.code} value={c.code}>
-                  {c.display_name}
-                </option>
-              ))}
-            </select>
-          </label>
+    <section className="dashboard-overview">
+      <div className="dashboard-intro">
+        <div>
+          <h2>카테고리별 1위</h2>
         </div>
-        {data.loading && <p role="status">현황을 불러오는 중…</p>}
-        {data.error && <p role="alert">{data.error}</p>}
-        {d && (
-          <>
-            <div className="history-summary">
-              <span>
-                최근 수집일 <b>{d.latest_date || "기록 없음"}</b>
-              </span>
-              <span>
-                활성 스냅샷 <b>{d.active_snapshots}개</b>
-              </span>
-              <span>
-                보존된 완료 버전 <b>{d.stored_versions}개</b>
-              </span>
-            </div>
-            <p>
-              {d.compared_to
-                ? `${d.compared_to} 직전 성공일 대비${d.missing_days ? " · 중간 " + d.missing_days + "일 미수집" : ""}`
-                : "이전 성공 기록이 없어 등락 비교를 하지 않습니다."}
-            </p>
-            <h3>최근 7일 실행 상태</h3>
-            <div className="execution-days">
-              {d.days.map((day) => (
-                <div
-                  key={day.date}
-                  className={"execution-day status-" + day.status}
-                >
-                  <span>{day.date.slice(5)}</span>
-                  <b>
-                    {
-                      {
-                        COMPLETE: "완료",
-                        FAILED: "실패/취소",
-                        RUNNING: "진행 중",
-                        MISSING: "미실행",
-                      }[day.status]
-                    }
-                  </b>
-                  <small>
-                    완료 {day.complete} · 실패/취소 {day.failed}
-                    {day.running ? " · 진행 " + day.running : ""}
-                  </small>
-                </div>
-              ))}
-            </div>
-            <p className="muted">
-              실행 날짜는 KST 기준입니다. 과거 날짜 파일을 오늘 가져온 경우
-              오늘의 실행으로 표시합니다.
-            </p>
-          </>
-        )}
-      </article>
-      {d?.latest_date ? (
-        <>
-          <article>
-            <h2>{d.latest_date} TOP 10</h2>
-            <RankingTable
-              items={d.top}
-              category={category}
-              onProduct={onProduct}
-            />
-          </article>
-          <article>
-            <h2>순위 상승 TOP 10</h2>
-            <RankingTable
-              items={d.rising}
-              category={category}
-              onProduct={onProduct}
-            />
-          </article>
-          <article>
-            <h2>신규 진입 TOP 10</h2>
-            <p>
-              직전 성공일의 100위권에 없던 상품입니다. 최초 판매 상품이라는 뜻은
-              아닙니다.
-            </p>
-            <RankingTable
-              items={d.new_entries}
-              category={category}
-              onProduct={onProduct}
-            />
-          </article>
-        </>
-      ) : (
-        !data.loading &&
-        !data.error && (
-          <article>
-            <h2>첫 번째 랭킹을 기록하세요</h2>
-            <p>
-              수집 버튼 또는 가져오기로 데이터를 저장하면 TOP 10과 변동 정보가
-              표시됩니다.
-            </p>
-          </article>
-        )
+      </div>
+      {data.loading && <p role="status">카테고리별 1위를 불러오는 중…</p>}
+      {data.error && <p role="alert">{data.error}</p>}
+      {leaders.length > 0 && (
+        <article className="dashboard-leaders-panel">
+          <div className="table-wrap">
+            <table className="dashboard-leaders-table">
+              <thead>
+                <tr>
+                  <th>순위</th>
+                  <th>순위변동</th>
+                  <th>브랜드</th>
+                  <th>카테고리</th>
+                  <th>상품명</th>
+                </tr>
+              </thead>
+              <tbody>
+                {leaders.map((row) => (
+                  <tr key={row.category}>
+                    <td>{row.product ? 1 : "—"}</td>
+                    <td
+                      title={
+                        row.compared_to
+                          ? `${row.compared_to} 대비 · 이전 순위 ${row.product?.previous_rank ?? "100위권 밖"}`
+                          : "이전 비교 기록 없음"
+                      }
+                    >
+                      {movement(row)}
+                    </td>
+                    <td>{row.product?.brand_name_at_capture || "—"}</td>
+                    <td>
+                      <span className="leader-category-name">
+                        {row.name === "전체" ? "전체 랭킹" : row.name}
+                      </span>
+                    </td>
+                    <td>
+                      {row.product ? (
+                        <button
+                          className="text-link"
+                          onClick={() =>
+                            onProduct(row.product!.product_id, row.category)
+                          }
+                        >
+                          {row.product.product_name_at_capture}
+                        </button>
+                      ) : (
+                        <span className="leader-table-empty">
+                          아직 수집된 랭킹이 없습니다.
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </article>
       )}
-    </>
+    </section>
   );
 }
