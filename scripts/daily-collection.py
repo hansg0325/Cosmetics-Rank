@@ -37,7 +37,19 @@ def request(path, body=None):
                 pass
         safe_codes = {"UNAUTHORIZED", "FORBIDDEN", "INVALID_ORIGIN", "VALIDATION", "PAYLOAD_TOO_LARGE"}
         detail = code if code in safe_codes else "Access/edge rejected request; check service token policy and Access logs"
-        raise RuntimeError(f"API {path}: HTTP {error.code}; {detail}") from None
+        content_type = error.headers.get("Content-Type", "unknown")
+        cf_ray = error.headers.get("CF-Ray", "missing")
+        server = error.headers.get("Server", "missing")
+        location = error.headers.get("Location", "")
+        redirect_host = ""
+        if location:
+            from urllib.parse import urlsplit
+            redirect_host = urlsplit(location).netloc
+        raise RuntimeError(
+            f"API {path}: HTTP {error.code}; {detail}; "
+            f"server={server}; content_type={content_type}; cf_ray={cf_ray}; "
+            f"redirect_host={redirect_host or 'none'}"
+        ) from None
 
 def main():
     rules = request("settings/keywords")
