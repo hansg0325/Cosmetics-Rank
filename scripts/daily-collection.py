@@ -84,7 +84,19 @@ def main():
             result = subprocess.run([sys.executable, "scripts/collect-rankings.py", "--category", category],
                 input=json.dumps(rules), text=True, encoding="utf-8", capture_output=True, cwd=ROOT, timeout=7200)
             if result.returncode:
-                raise RuntimeError("Browser collection failed; no snapshot published")
+                error_line = next((line for line in result.stdout.splitlines()
+                                   if line.startswith("COSMETICS_RANK_ERROR ")), "")
+                if error_line:
+                    diagnostic = json.loads(error_line.split(" ", 1)[1])
+                    raise RuntimeError(
+                        "Browser collection failed; no snapshot published; "
+                        f"page_title={diagnostic.get('page_title') or 'empty'}; "
+                        f"products={diagnostic.get('product_count', 0)}; "
+                        f"category_matches={diagnostic.get('category_matches')}; "
+                        f"error_type={diagnostic.get('error_type') or 'none'}; "
+                        f"error={diagnostic.get('error') or 'none'}"
+                    )
+                raise RuntimeError("Browser collection failed; no diagnostic marker; no snapshot published")
             line = next(line for line in result.stdout.splitlines() if line.startswith("COSMETICS_RANK_CAPTURE "))
             capture = json.loads(line.split(" ", 1)[1])
             rows = [{**row, "ranking_date": capture["ranking_date"], "category_code": category} for row in capture["rows"]]
@@ -105,7 +117,7 @@ def main():
                     request(f"imports/{run_id}/cancel", {"failed": True})
                 except Exception:
                     pass
-            print(f"{category}: failed ({type(error).__name__})", flush=True)
+            print(f"{category}: failed ({type(error).__name__}): {error}", flush=True)
             failures.append(category)
     if failures:
         raise SystemExit("Failed categories: " + ", ".join(failures))
