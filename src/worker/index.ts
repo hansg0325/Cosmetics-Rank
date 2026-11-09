@@ -84,10 +84,12 @@ app.use("*", async (c, next) => {
 });
 app.use("/api/*", async (c, next) => {
   const path = new URL(c.req.url).pathname;
-  const visitorKeywordUpdate =
-    c.req.method === "POST" && path === "/api/settings/keywords";
   if (path.startsWith("/api/admin/") && c.get("role") !== "admin")
     return c.json({ error: "ADMIN_ACCESS_REQUIRED" }, 403);
+  if (path === "/api/export-rankings" && c.get("role") !== "admin")
+    return c.json({ error: "ADMIN_ACCESS_REQUIRED" }, 403);
+  const visitorKeywordUpdate =
+    c.req.method === "POST" && path === "/api/settings/keywords";
   if (
     c.get("role") !== "admin" &&
     ((c.req.method !== "GET" &&

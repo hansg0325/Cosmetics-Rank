@@ -338,8 +338,12 @@ function App() {
           </article>
         )}
         {page === "점유율 분석" && <MarketSharePanel revision={revision} />}
-        {page === "설정" && <AdminExport disabled={busy} />}
-        {page === "설정" && <KeywordSettings />}
+        {page === "설정" && (
+          <>
+            {role === "admin" && <AdminExport disabled={busy} />}
+            <KeywordSettings />
+          </>
+        )}
         {["랭킹", "순위 변동"].includes(page) && (
           <RankingsPanel
             key={page}

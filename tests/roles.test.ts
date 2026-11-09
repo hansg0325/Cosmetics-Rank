@@ -18,7 +18,13 @@ const bindings = {
   ASSETS: {} as Fetcher,
 };
 
-function request(path: string, email: string, method = "GET") {
+function request(
+  path: string,
+  email: string,
+  method = "GET",
+  body?: unknown,
+  db = bindings.DB,
+) {
   return app.request(
     "https://rank.example.com" + path,
     {
@@ -26,9 +32,11 @@ function request(path: string, email: string, method = "GET") {
       headers: {
         ...(email ? { "cf-access-jwt-assertion": "email:" + email } : {}),
         origin: "https://rank.example.com",
+        ...(body === undefined ? {} : { "content-type": "application/json" }),
       },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     },
-    bindings,
+    { ...bindings, DB: db },
   );
 }
 
@@ -44,7 +52,7 @@ describe("조회 사용자와 관리자 권한", () => {
     expect((await request("/api/admin/session", "other@example.com")).status).toBe(403);
   });
 
-  it("방문자는 키워드 입력 검증까지 도달하고 수집 및 관리자 요청은 거부된다", async () => {
+  it("방문자는 키워드를 수정할 수 있지만 수집·관리자 요청은 거부된다", async () => {
     for (const path of [
       "/api/imports",
       "/api/admin/imports",
@@ -61,7 +69,15 @@ describe("조회 사용자와 관리자 권한", () => {
         403,
       );
     }
-    expect((await request("/api/settings/keywords", "", "POST")).status).toBe(400);
+    const keywordDb = {
+      prepare: () => ({ bind: () => ({ run: async () => ({}) }) }),
+    } as unknown as D1Database;
+    expect(
+      (
+        await request("/api/settings/keywords", "", "POST", [], keywordDb)
+      ).status,
+    ).toBe(200);
+    expect((await request("/api/export-rankings", "")).status).toBe(403);
     expect((await request("/api/health", "reader@example.com")).status).toBe(
       200,
     );
