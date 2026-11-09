@@ -39,6 +39,7 @@ if not result.get("valid"):
         "browser_version": result.get("browser_version", ""),
         "effective_user_agent": result.get("effective_user_agent", ""),
         "navigation_timed_out": result.get("navigation_timed_out", False),
+        "challenge_indicators": result.get("challenge_indicators", {}),
         "error_type": result.get("error_type", ""),
         "error": result.get("error", "")[:500],
     }, ensure_ascii=False), flush=True)

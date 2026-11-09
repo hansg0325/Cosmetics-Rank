@@ -1,7 +1,9 @@
 """Collect public ranking and product details with Selenium.
 
-Uses Chrome's native User-Agent rather than overriding it with a stale value.
-No CAPTCHA interaction or retries are performed.
+Uses the browser configuration from the supplied reference (headless Chrome,
+1920x1080 viewport, Chrome 120 User-Agent) and waits briefly for client-side
+rendering before validating the page. It does not solve or interact with
+CAPTCHAs or Cloudflare challenges.
 """
 
 import argparse
@@ -20,6 +22,12 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 
 RANKING_TO_DETAILS_DELAY_SECONDS = 10
+RANKING_INITIAL_WAIT_SECONDS = 2
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/120.0.0.0 Safari/537.36"
+)
 BASE = "https://www.oliveyoung.co.kr"
 TARGETS = [
     ("overall", BASE + "/store/main/getBestList.do"),
@@ -82,6 +90,13 @@ def page_diagnostic(driver, source, stage, navigation_timed_out=False):
         "browser_version": driver.capabilities.get("browserVersion", ""),
         "effective_user_agent": user_agent,
         "navigation_timed_out": navigation_timed_out,
+        "challenge_indicators": {
+            marker: marker in (page_title + " " + body).lower()
+            for marker in (
+                "cloudflare", "just a moment", "checking your browser",
+                "verify you are human", "attention required", "challenge",
+            )
+        },
     }
 
 
@@ -153,6 +168,8 @@ def probe(kind, source, chrome_binary, category_code=None, category_name=None):
     options = webdriver.ChromeOptions()
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument(f"user-agent={USER_AGENT}")
     options.page_load_strategy = "eager"
     options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
     if chrome_binary:
@@ -175,10 +192,10 @@ def probe(kind, source, chrome_binary, category_code=None, category_name=None):
             navigation_timed_out = True
             emit({"target": kind, "stage": "page_load_timeout"})
         stage = "ranking_page_wait"
-        time.sleep(10)
+        time.sleep(RANKING_INITIAL_WAIT_SECONDS)
         stage = "initial_rank_extraction"
         initial = extract(driver, kind, source)
-        emit({"target": kind, "stage": "after_reference_10s_wait",
+        emit({"target": kind, "stage": "after_reference_2s_wait",
               "title": driver.title, "current_url": driver.current_url,
               "product_count": initial["product_count"],
               "category_matches": initial.get("category_matches")})
@@ -249,7 +266,7 @@ def main():
         emit({"stage": "result", **{k:v for k,v in result.items() if k != "products"},
               "sample_products": result.get("products", [])[:3]})
     report = {"tested_at": datetime.now(timezone.utc).isoformat(),
-              "configuration": "reference headless/no-sandbox/Chrome58 User-Agent",
+              "configuration": "headless/no-sandbox/1920x1080/Chrome120 User-Agent/2s initial wait",
               "db_writes": False, "prices_extracted": False, "images_extracted": False,
               "results": results}
     output = Path(args.output)

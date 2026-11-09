@@ -122,6 +122,7 @@ def main():
                         f"category_matches={diagnostic.get('category_matches')}; "
                         f"browser_version={diagnostic.get('browser_version') or 'unknown'}; "
                         f"effective_user_agent={diagnostic.get('effective_user_agent') or 'unknown'}; "
+                        f"challenge_indicators={json.dumps(diagnostic.get('challenge_indicators') or {}, ensure_ascii=False)}; "
                         f"navigation_timed_out={diagnostic.get('navigation_timed_out', False)}; "
                         f"error_type={diagnostic.get('error_type') or 'none'}; "
                         f"error={diagnostic.get('error') or 'none'}"
