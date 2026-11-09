@@ -74,13 +74,13 @@ app.use("*", async (c, next) => {
 });
 app.use("/api/*", async (c, next) => {
   const path = new URL(c.req.url).pathname;
+  const keywordSettingsUpdate =
+    c.req.method === "POST" && path === "/api/settings/keywords";
   if (
     c.get("role") !== "admin" &&
-    (c.req.method !== "GET" ||
+    ((c.req.method !== "GET" && !keywordSettingsUpdate) ||
       path === "/api/imports" ||
       path.startsWith("/api/imports/") ||
-      path === "/api/export-rankings" ||
-      path === "/api/settings/keywords" ||
       path.startsWith("/api/collector/"))
   )
     return c.json({ error: "FORBIDDEN" }, 403);

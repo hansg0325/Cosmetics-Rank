@@ -254,7 +254,8 @@ function App() {
             "순위 변동",
             "상품 이력",
             "점유율 분석",
-            ...(role === "admin" ? ["설정", "관리자"] : []),
+            ...(role ? ["설정"] : []),
+            ...(role === "admin" ? ["관리자"] : []),
           ].map((p) => (
             <button
               key={p}
@@ -319,11 +320,9 @@ function App() {
             </button>
           </article>
         )}
-        {role === "admin" && page === "관리자" && (
-          <AdminExport disabled={busy} />
-        )}
         {page === "점유율 분석" && <MarketSharePanel revision={revision} />}
-        {role === "admin" && page === "설정" && <KeywordSettings />}
+        {role && page === "설정" && <AdminExport disabled={busy} />}
+        {role && page === "설정" && <KeywordSettings />}
         {["랭킹", "순위 변동"].includes(page) && (
           <RankingsPanel
             key={page}
