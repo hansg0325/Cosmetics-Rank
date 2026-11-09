@@ -22,6 +22,35 @@ const app = new Hono<{
   Bindings: Env;
   Variables: { role: Role; collectionApiAuthorized: boolean };
 }>();
+type ReadCacheEntry = {
+  body: string;
+  status: number;
+  headers: [string, string][];
+  expiresAt: number;
+};
+const READ_CACHE_TTL_MS = 30_000;
+const READ_CACHE_MAX_ENTRIES = 32;
+const READ_CACHE_MAX_BODY_BYTES = 256 * 1024;
+const readCache = new Map<string, ReadCacheEntry>();
+let readCacheGeneration = 0;
+function invalidateReadCache() {
+  readCacheGeneration += 1;
+  readCache.clear();
+}
+const cacheableReadPaths = new Set([
+  "/api/health",
+  "/api/categories",
+  "/api/collection-status",
+  "/api/dashboard",
+  "/api/dashboard/leaders",
+  "/api/dates",
+  "/api/market-share",
+  "/api/rankings",
+  "/api/changes",
+  "/api/rank-series",
+  "/api/products",
+  "/api/product-history",
+]);
 const keysets = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 app.use("*", async (c, next) => {
   const url = new URL(c.req.url);
@@ -108,6 +137,53 @@ app.use(
     onError: (c) => c.json({ error: "PAYLOAD_TOO_LARGE" }, 413),
   }),
 );
+app.use("/api/*", async (c, next) => {
+  const url = new URL(c.req.url);
+  const cacheable =
+    !!c.req.header("cf-ray") &&
+    c.req.method === "GET" &&
+    (cacheableReadPaths.has(url.pathname) ||
+      /^\/api\/products\/[^/]+\/history$/.test(url.pathname));
+  if (!cacheable) return next();
+
+  const key = url.pathname + url.search;
+  const generation = readCacheGeneration;
+  const cached = readCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) {
+    readCache.delete(key);
+    readCache.set(key, cached);
+    return new Response(cached.body, {
+      status: cached.status,
+      headers: cached.headers,
+    });
+  }
+  if (cached) readCache.delete(key);
+
+  await next();
+  if (generation !== readCacheGeneration) return;
+  const response = c.res;
+  if (
+    response.status !== 200 ||
+    !response.headers.get("content-type")?.includes("application/json")
+  )
+    return;
+  const body = await response.clone().text();
+  if (new TextEncoder().encode(body).byteLength > READ_CACHE_MAX_BODY_BYTES)
+    return;
+  const headers: [string, string][] = [];
+  response.headers.forEach((value, name) => headers.push([name, value]));
+  readCache.set(key, {
+    body,
+    status: response.status,
+    headers,
+    expiresAt: Date.now() + READ_CACHE_TTL_MS,
+  });
+  while (readCache.size > READ_CACHE_MAX_ENTRIES) {
+    const oldest = readCache.keys().next().value;
+    if (oldest === undefined) break;
+    readCache.delete(oldest);
+  }
+});
 app.onError((err, c) => {
   if (err instanceof ZodError)
     return c.json({ error: "VALIDATION", details: err.issues }, 400);
@@ -216,6 +292,7 @@ app.post("/api/imports", async (c) => {
     .prepare("SELECT id FROM snapshots WHERE ingestion_run_id=?")
     .bind(id)
     .first();
+  invalidateReadCache();
   return c.json(
     { id, snapshot_id: snapshot?.id, already_complete: false },
     201,
@@ -354,6 +431,7 @@ app.post("/api/imports/:id/complete", async (c) => {
     .first<{ status: string }>();
   if (final?.status !== "COMPLETE")
     return c.json({ error: "IMPORT_NOT_OPEN" }, 409);
+  invalidateReadCache();
   return c.json({ status: "COMPLETE" });
 });
 app.on("POST", ["/api/imports/:id/cancel", "/api/admin/imports/:id/cancel"], async (c) => {
@@ -392,6 +470,7 @@ app.on("POST", ["/api/imports/:id/cancel", "/api/admin/imports/:id/cancel"], asy
     .first<{ status: string }>();
   if (final?.status === "COMPLETE")
     return c.json({ error: "ALREADY_COMPLETE" }, 409);
+  invalidateReadCache();
   return c.json({ status: final?.status });
 });
 app.all("/api/*", (c) => c.json({ error: "NOT_FOUND" }, 404));

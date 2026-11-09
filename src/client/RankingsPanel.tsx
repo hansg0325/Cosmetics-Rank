@@ -8,7 +8,7 @@ import type {
   ChangeEntry,
 } from "../shared/analytics";
 import { daysBetween, shiftDay } from "../shared/analytics";
-import { params, useData } from "./analyticsApi";
+import { getData, params, useData } from "./analyticsApi";
 import { RankChart, type RankSeries } from "./RankChart";
 export type Category = { code: string; display_name: string };
 export type OpenProduct = (id: string, category: string) => void;
@@ -192,11 +192,10 @@ function SeriesLoader({
       try {
         const query = new URLSearchParams({ category, from, to });
         for (const id of ids) query.append("id", id);
-        const response = await fetch("/api/rank-series?" + query, {
-          signal: controller.signal,
-        });
-        if (!response.ok) throw Error("상품 이력 조회 실패");
-        const result = (await response.json()) as { series: RankSeries[] };
+        const result = await getData<{ series: RankSeries[] }>(
+          "rank-series?" + query,
+          controller.signal,
+        );
         const series = result.series;
         if (!ignored) setState({ key, series, error: "" });
       } catch (e) {

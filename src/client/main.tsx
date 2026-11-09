@@ -1,6 +1,6 @@
 import { formatCollectedAt } from "../shared/dateTime";
 import { AdminExport } from "./AdminExport";
-import { useData } from "./analyticsApi";
+import { invalidateDataCache, useData } from "./analyticsApi";
 import { MarketSharePanel } from "./MarketSharePanel";
 import { KeywordSettings } from "./KeywordSettings";
 import React, { useEffect, useRef, useState } from "react";
@@ -154,9 +154,11 @@ function App() {
         }
         done += group.length;
       }
+      invalidateDataCache();
       setMessage(`${done}행 처리 완료 · 동일한 내용은 중복 저장하지 않습니다`);
       await refresh();
     } catch (e) {
+      invalidateDataCache();
       if (current)
         await api(`imports/${current}/cancel`, { failed: true }).catch(
           () => {},
