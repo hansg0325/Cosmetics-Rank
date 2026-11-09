@@ -14,6 +14,7 @@ import {
   type ProductHistory,
   type ProductHistoryTable,
   type DashboardData,
+  type HistoryPoint,
 } from "../shared/analytics";
 const category = z.string().regex(/^[a-z0-9_]{1,60}$/);
 const query = z.string().trim().max(100);
@@ -228,6 +229,89 @@ analytics.get("/changes", async (c) =>
     ),
   ),
 );
+analytics.get("/rank-series", async (c) => {
+  const ids = (c.req.queries("id") || []).map((value) => id.parse(value));
+  const cat = category.parse(c.req.query("category")),
+    from = day.parse(c.req.query("from")),
+    to = day.parse(c.req.query("to"));
+  if (!ids.length || ids.length > 30 || new Set(ids).size !== ids.length)
+    return c.json({ error: "INVALID_SERIES_IDS" }, 400);
+  if (daysBetween(from, to) < 0 || daysBetween(from, to) > 179)
+    return c.json(
+      {
+        error: "INVALID_RANGE",
+        message: "날짜 범위는 시작일부터 최대 180일입니다.",
+      },
+      400,
+    );
+
+  const placeholders = ids.map(() => "?").join(",");
+  const db = c.env.DB;
+  const products = await rows<{
+    product_id: string;
+    product_name: string;
+    brand_name: string;
+  }>(
+    db
+      .prepare(
+        `WITH ranked AS (
+          SELECT e.product_id,e.product_name_at_capture product_name,e.brand_name_at_capture brand_name,
+            ROW_NUMBER() OVER(PARTITION BY e.product_id ORDER BY s.ranking_date DESC,s.collected_at DESC,s.id DESC) position
+          FROM ranking_entries e JOIN snapshots s ON s.id=e.snapshot_id
+          WHERE e.product_id IN (${placeholders}) AND s.status='COMPLETE' AND s.is_active=1
+        ) SELECT product_id,product_name,brand_name FROM ranked WHERE position=1`,
+      )
+      .bind(...ids),
+    "rank_series_products",
+  );
+  if (!products.length) return c.json({ series: [] });
+
+  const records = await rows<{
+    date: string;
+    product_id: string | null;
+    rank: number | null;
+  }>(
+    db
+      .prepare(
+        `SELECT s.ranking_date date,e.product_id,e.rank
+         FROM snapshots s LEFT JOIN ranking_entries e
+           ON e.snapshot_id=s.id AND e.product_id IN (${placeholders})
+         WHERE s.category_code=? AND s.status='COMPLETE' AND s.is_active=1
+           AND s.ranking_date BETWEEN ? AND ?
+         ORDER BY s.ranking_date`,
+      )
+      .bind(...ids, cat, from, to),
+    "rank_series_points",
+  );
+  const snapshotDates = new Set(records.map((record) => record.date));
+  const ranks = new Map<string, number>();
+  for (const record of records) {
+    if (record.product_id && record.rank !== null)
+      ranks.set(`${record.date}/${record.product_id}`, record.rank);
+  }
+  const dates = Array.from(
+    { length: daysBetween(from, to) + 1 },
+    (_, index) => shiftDay(from, index),
+  );
+  const series = products.map((product) => ({
+    id: product.product_id,
+    name: product.product_name,
+    brand: product.brand_name,
+    points: dates.map((date): HistoryPoint => {
+      const rank = ranks.get(`${date}/${product.product_id}`) ?? null;
+      return {
+        date,
+        rank,
+        state: !snapshotDates.has(date)
+          ? "MISSING"
+          : rank === null
+            ? "OUTSIDE_TOP100"
+            : "RANKED",
+      };
+    }),
+  }));
+  return c.json({ series });
+});
 analytics.get("/products", async (c) => {
   const q = query.parse(c.req.query("query") || ""),
     cursor = id.optional().parse(c.req.query("cursor")),

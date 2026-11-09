@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import type {
   Comparison,
   ChangeEntry,
-  ProductHistory,
 } from "../shared/analytics";
 import { daysBetween, shiftDay } from "../shared/analytics";
 import { params, useData } from "./analyticsApi";
@@ -190,30 +189,15 @@ function SeriesLoader({
     const controller = new AbortController();
     let ignored = false;
     async function load() {
-      const series: RankSeries[] = [];
       try {
-        for (let i = 0; i < ids.length; i += 3) {
-          const group = await Promise.all(
-            ids.slice(i, i + 3).map(async (id) => {
-              const response = await fetch(
-                "/api/products/" +
-                  encodeURIComponent(id) +
-                  "/history?" +
-                  params({ category, from, to }),
-                { signal: controller.signal },
-              );
-              if (!response.ok) throw Error("상품 이력 조회 실패");
-              return (await response.json()) as ProductHistory;
-            }),
-          );
-          for (const history of group)
-            series.push({
-              id: history.product.product_id,
-              name: history.product.product_name,
-              brand: history.product.brand_name,
-              points: history.points,
-            });
-        }
+        const query = new URLSearchParams({ category, from, to });
+        for (const id of ids) query.append("id", id);
+        const response = await fetch("/api/rank-series?" + query, {
+          signal: controller.signal,
+        });
+        if (!response.ok) throw Error("상품 이력 조회 실패");
+        const result = (await response.json()) as { series: RankSeries[] };
+        const series = result.series;
         if (!ignored) setState({ key, series, error: "" });
       } catch (e) {
         if (!ignored) setState({ key, series: [], error: String(e) });
