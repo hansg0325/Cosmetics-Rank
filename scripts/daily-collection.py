@@ -83,7 +83,7 @@ def main():
     # Temporary safe diagnostic: compare only the known v2 ID prefix; never print credential values.
     print("Access client ID matches v2:", os.environ["CF_ACCESS_CLIENT_ID"].startswith("c2bcf43c"), flush=True)
     rules = request("settings/keywords")
-    categories = json.loads((ROOT / "src/shared/collectionCategories.json").read_text())
+    categories = json.loads((ROOT / "src/shared/collectionCategories.json").read_text(encoding="utf-8"))
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--category", choices=["all", *categories],
                         default=os.environ.get("COLLECTION_CATEGORY", "all"))
