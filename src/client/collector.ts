@@ -21,7 +21,7 @@ const jobSchema = z.object({
     .optional(),
 });
 async function request(path: string, body?: unknown) {
-  const response = await fetch("/api/collector/" + path, {
+  const response = await fetch("/api/admin/collector/" + path, {
     ...(body === undefined
       ? {}
       : {

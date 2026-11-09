@@ -41,7 +41,7 @@ for (const r of capture.rows) {
   )
     throw Error(`${r.rank}위 불일치 또는 가격 저장 오류`);
 }
-const importsResponse = await fetch(origin + "/api/imports", { headers });
+const importsResponse = await fetch(origin + "/api/admin/imports", { headers });
 if (!importsResponse.ok) throw Error("이력 조회 실패");
 const imports = await importsResponse.json();
 const active = imports.filter(

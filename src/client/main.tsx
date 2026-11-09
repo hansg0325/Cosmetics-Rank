@@ -73,7 +73,7 @@ function App() {
   const loadRuns = async (index: number) => {
     setRunsLoading(true);
     try {
-      const rows = await api<Run[]>(`imports?offset=${index * 20}&limit=21`);
+      const rows = await api<Run[]>(`admin/imports?offset=${index * 20}&limit=21`);
       setRuns(rows.slice(0, 20));
       setHasNextRuns(rows.length > 20);
       setRunPage(index);
@@ -90,12 +90,23 @@ function App() {
     ]);
   };
   useEffect(() => {
-    api<{ role: "admin" | "viewer" }>("me")
+    const adminEntry = window.location.pathname.replace(/\/$/, "") === "/admin";
+    const sessionPath = adminEntry ? "admin/session" : "me";
+    api<{ role: "admin" | "viewer" }>(sessionPath)
       .then(async ({ role: nextRole }) => {
-        setRole(nextRole);
-        await refresh(nextRole === "admin");
+        setRole(adminEntry && nextRole === "admin" ? "admin" : "viewer");
+        if (adminEntry && nextRole === "admin") setPage("관리자");
+        await refresh(adminEntry && nextRole === "admin");
       })
-      .catch((e) => setMessage(String(e)));
+      .catch((e) => {
+        setRole("viewer");
+        if (adminEntry) {
+          window.history.replaceState(null, "", "/");
+          setMessage("관리자 로그인이 필요합니다. 다시 관리자 탭을 선택하세요.");
+        } else {
+          setMessage(String(e));
+        }
+      });
   }, []);
   async function upload(inputRows: RankingRow[], inputCapture: BrowserCapture) {
     let current: string | undefined;
@@ -254,14 +265,20 @@ function App() {
             "순위 변동",
             "상품 이력",
             "점유율 분석",
-            ...(role ? ["설정"] : []),
-            ...(role === "admin" ? ["관리자"] : []),
+            "설정",
+            "관리자",
           ].map((p) => (
             <button
               key={p}
               className={p === page ? "selected" : ""}
               aria-current={p === page ? "page" : undefined}
-              onClick={() => setPage(p)}
+              onClick={() => {
+                if (p === "관리자" && role !== "admin") {
+                  window.location.assign("/admin");
+                  return;
+                }
+                setPage(p);
+              }}
             >
               {p}
             </button>
@@ -321,8 +338,8 @@ function App() {
           </article>
         )}
         {page === "점유율 분석" && <MarketSharePanel revision={revision} />}
-        {role && page === "설정" && <AdminExport disabled={busy} />}
-        {role && page === "설정" && <KeywordSettings />}
+        {page === "설정" && <AdminExport disabled={busy} />}
+        {page === "설정" && <KeywordSettings />}
         {["랭킹", "순위 변동"].includes(page) && (
           <RankingsPanel
             key={page}
@@ -391,7 +408,7 @@ function App() {
                         {r.status === "RUNNING" && (
                           <button
                             onClick={() =>
-                              void api(`imports/${r.id}/cancel`, {})
+                              void api(`admin/imports/${r.id}/cancel`, {})
                                 .then(() => refresh())
                                 .catch((e) => setMessage(String(e)))
                             }

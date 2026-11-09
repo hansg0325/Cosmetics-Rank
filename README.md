@@ -36,6 +36,6 @@ Python 수집기 테스트는 `tests/test_*.py`에 있습니다. `pnpm test:smok
 
 ## 배포 상태
 
-Cloudflare 원격 배포는 아직 하지 않았습니다. `wrangler.jsonc`의 D1 ID는 로컬용 자리표시자입니다. 원격 Worker는 Cloudflare Access 인증값이 없으면 모든 요청을 거부합니다. 현재 Selenium 수집은 이 PC에서만 실행되므로 배포된 사이트의 관리자 수집 버튼은 사용할 수 없습니다. 배포 DB에 수집 결과를 올리는 기능을 추가해야 원격 사이트에서도 최신 데이터가 보입니다. 절차와 제한은 [운영 가이드](docs/operations.md)를 참고하세요.
+Cloudflare Worker와 원격 D1은 배포되어 있습니다. 일반 방문자는 로그인 없이 조회하고, `/admin`과 `/api/admin/*`는 Cloudflare Access로 관리자만 접근하도록 구성합니다. Actions 수집은 `/api/imports*`의 Service Auth와 API 키를 사용합니다. 현재 소스 변경은 이 경로별 Access 정책 적용 후 재배포해야 live 사이트에 반영됩니다. 절차와 제한은 [운영 가이드](docs/operations.md)를 참고하세요.
 
 Git에는 소스와 마이그레이션만 포함합니다. `.dev.vars`, `.wrangler/`, `data/`, `.local-browser/`, `dist/`는 제외합니다. 로컬 DB는 GitHub에 올라가지 않습니다.

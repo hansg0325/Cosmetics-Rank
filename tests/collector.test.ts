@@ -43,7 +43,7 @@ describe("Hono 로컬 수집 서비스 프록시", () => {
     expect(codes).toHaveLength(10);
     for (const category_code of codes) {
       expect(collectionCategorySchema.parse(category_code)).toBe(category_code);
-      expect((await req("/api/collector/jobs", { category_code })).status).toBe(
+      expect((await req("/api/admin/collector/jobs", { category_code })).status).toBe(
         202,
       );
       expect(fetcher).toHaveBeenLastCalledWith(
@@ -61,7 +61,7 @@ describe("Hono 로컬 수집 서비스 프록시", () => {
     const fetcher = vi.fn(async () => Response.json({ id, status: "RUNNING" }));
     vi.stubGlobal("fetch", fetcher);
     expect(
-      (await req("/api/collector/jobs", { category_code: "skincare" })).status,
+      (await req("/api/admin/collector/jobs", { category_code: "skincare" })).status,
     ).toBe(202);
     expect(fetcher).toHaveBeenCalledWith(
       "http://127.0.0.1:8790/jobs",
@@ -73,13 +73,13 @@ describe("Hono 로컬 수집 서비스 프록시", () => {
       }),
     );
     expect(
-      (await req("/api/collector/jobs", { category_code: "unknown" })).status,
+      (await req("/api/admin/collector/jobs", { category_code: "unknown" })).status,
     ).toBe(400);
   });
   it("인증을 거쳐 고정 loopback 주소만 호출", async () => {
     const fetcher = vi.fn(async () => Response.json({ id, status: "RUNNING" }));
     vi.stubGlobal("fetch", fetcher);
-    expect((await req("/api/collector/jobs", {})).status).toBe(202);
+    expect((await req("/api/admin/collector/jobs", {})).status).toBe(202);
     expect(fetcher).toHaveBeenCalledWith(
       "http://127.0.0.1:8790/jobs",
       expect.objectContaining({
@@ -97,7 +97,7 @@ describe("Hono 로컬 수집 서비스 프록시", () => {
     expect(
       (
         await app.request(
-          "http://localhost/api/collector/jobs",
+          "http://localhost/api/admin/collector/jobs",
           { method: "POST", body: "{}" },
           env,
         )
@@ -106,7 +106,7 @@ describe("Hono 로컬 수집 서비스 프록시", () => {
     expect(
       (
         await app.request(
-          "http://localhost/api/collector/jobs",
+          "http://localhost/api/admin/collector/jobs",
           {
             method: "POST",
             headers: { origin: "http://localhost", "content-type": "application/json" },
@@ -118,19 +118,19 @@ describe("Hono 로컬 수집 서비스 프록시", () => {
     ).toBe(202);
     // The local-only helper cannot be called through a deployed host.
     expect(
-      (await req("/api/collector/jobs", {}, "https://example.workers.dev"))
+      (await req("/api/admin/collector/jobs", {}, "https://example.workers.dev"))
         .status,
-    ).toBe(401);
+    ).toBe(403);
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
   it("임의 URL과 잘못된 작업 ID 거부", async () => {
     const fetcher = vi.fn();
     vi.stubGlobal("fetch", fetcher);
     expect(
-      (await req("/api/collector/jobs", { url: "https://evil.example" }))
+      (await req("/api/admin/collector/jobs", { url: "https://evil.example" }))
         .status,
     ).toBe(400);
-    expect((await req("/api/collector/jobs/not-a-uuid")).status).toBe(400);
+    expect((await req("/api/admin/collector/jobs/not-a-uuid")).status).toBe(400);
     expect(fetcher).not.toHaveBeenCalled();
   });
   it("서비스 미실행 시 안전한 안내 반환", async () => {
@@ -140,7 +140,7 @@ describe("Hono 로컬 수집 서비스 프록시", () => {
         throw Error("private stack");
       }),
     );
-    const r = await req("/api/collector/jobs", {});
+    const r = await req("/api/admin/collector/jobs", {});
     expect(r.status).toBe(503);
     expect(await r.json()).toMatchObject({
       error: "COLLECTOR_UNAVAILABLE",
@@ -152,14 +152,14 @@ describe("Hono 로컬 수집 서비스 프록시", () => {
       "fetch",
       vi.fn(async () => Response.json({ id, status: "RUNNING" })),
     );
-    expect(await (await req("/api/collector/jobs/" + id)).json()).toMatchObject(
+    expect(await (await req("/api/admin/collector/jobs/" + id)).json()).toMatchObject(
       { id, status: "RUNNING" },
     );
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => Response.json({ error: "NOT_FOUND" }, { status: 404 })),
     );
-    expect((await req("/api/collector/jobs/" + id)).status).toBe(404);
+    expect((await req("/api/admin/collector/jobs/" + id)).status).toBe(404);
   });
 });
 describe("버튼 수집 진행 상태 처리", () => {

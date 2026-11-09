@@ -14,7 +14,6 @@ const bindings = {
   ACCESS_TEAM: "example",
   ACCESS_AUD: "audience",
   ALLOWED_EMAIL: "owner@example.com",
-  VIEWER_EMAILS: "reader@example.com, second@example.com",
   DB: {} as D1Database,
   ASSETS: {} as Fetcher,
 };
@@ -25,7 +24,7 @@ function request(path: string, email: string, method = "GET") {
     {
       method,
       headers: {
-        "cf-access-jwt-assertion": "email:" + email,
+        ...(email ? { "cf-access-jwt-assertion": "email:" + email } : {}),
         origin: "https://rank.example.com",
       },
     },
@@ -34,34 +33,35 @@ function request(path: string, email: string, method = "GET") {
 }
 
 describe("조회 사용자와 관리자 권한", () => {
-  it("본인과 등록된 조회 사용자만 로그인한다", async () => {
+  it("방문자는 로그인 없이 조회하며 관리자만 관리자 세션에 접근한다", async () => {
     expect(
-      await (await request("/api/me", "owner@example.com")).json(),
+      await (await request("/api/admin/session", "owner@example.com")).json(),
     ).toEqual({ role: "admin" });
     expect(
       await (await request("/api/me", "READER@example.com")).json(),
     ).toEqual({ role: "viewer" });
-    expect((await request("/api/me", "other@example.com")).status).toBe(401);
+    expect(await (await request("/api/me", "")).json()).toEqual({ role: "viewer" });
+    expect((await request("/api/admin/session", "other@example.com")).status).toBe(403);
   });
 
-  it("조회 사용자의 관리자 API와 모든 쓰기 요청을 막는다", async () => {
+  it("방문자는 키워드 입력 검증까지 도달하고 수집 및 관리자 요청은 거부된다", async () => {
     for (const path of [
       "/api/imports",
-      "/api/export-rankings",
-      "/api/settings/keywords",
-      "/api/collector/jobs/123",
+      "/api/admin/imports",
+      "/api/admin/collector/jobs/123",
     ]) {
       expect((await request(path, "reader@example.com")).status).toBe(403);
     }
     for (const path of [
       "/api/imports",
-      "/api/settings/keywords",
-      "/api/collector/jobs",
+      "/api/admin/collector/jobs",
+      "/api/admin/imports/123/cancel",
     ]) {
       expect((await request(path, "reader@example.com", "POST")).status).toBe(
         403,
       );
     }
+    expect((await request("/api/settings/keywords", "", "POST")).status).toBe(400);
     expect((await request("/api/health", "reader@example.com")).status).toBe(
       200,
     );

@@ -13,29 +13,44 @@ type Env = {
   ASSETS: Fetcher;
   LOCAL_DEV_TOKEN?: string;
   COLLECTION_API_KEY?: string;
-  ACCESS_TEAM: string;
-  ACCESS_AUD: string;
-  ALLOWED_EMAIL: string;
-  VIEWER_EMAILS?: string;
+  ACCESS_TEAM?: string;
+  ACCESS_AUD?: string;
+  ALLOWED_EMAIL?: string;
 };
 type Role = "admin" | "viewer";
-const app = new Hono<{ Bindings: Env; Variables: { role: Role } }>();
+const app = new Hono<{
+  Bindings: Env;
+  Variables: { role: Role; collectionApiAuthorized: boolean };
+}>();
 const keysets = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 app.use("*", async (c, next) => {
   const url = new URL(c.req.url);
   const local = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
   // The desktop-only server binds to loopback. Its helper still uses the
   // internal token, but opening the local UI requires no login.
-  let role: Role | null = local && !!c.env.LOCAL_DEV_TOKEN ? "admin" : null;
-  const machinePath = /^\/api\/imports(?:\/[^/]+\/(?:chunks|complete|cancel))?$/.test(url.pathname) ||
-    (c.req.method === "GET" && url.pathname === "/api/settings/keywords");
-  if (!role && machinePath && c.env.COLLECTION_API_KEY && c.req.header("authorization")) {
+  let role: Role = local && !!c.env.LOCAL_DEV_TOKEN ? "admin" : "viewer";
+  let collectionApiAuthorized = false;
+  const machinePath =
+    c.req.method === "POST" &&
+    /^\/api\/imports(?:\/[^/]+\/(?:chunks|complete|cancel))?$/.test(
+      url.pathname,
+    );
+  if (machinePath && c.env.COLLECTION_API_KEY && c.req.header("authorization")) {
     const encoder = new TextEncoder();
     const provided = await crypto.subtle.digest("SHA-256", encoder.encode(c.req.header("authorization")!));
     const expected = await crypto.subtle.digest("SHA-256", encoder.encode(`Bearer ${c.env.COLLECTION_API_KEY}`));
-    if (timingSafeEqual(new Uint8Array(provided), new Uint8Array(expected))) role = "admin";
+    collectionApiAuthorized = timingSafeEqual(
+      new Uint8Array(provided),
+      new Uint8Array(expected),
+    );
   }
-  if (!role && c.env.ACCESS_TEAM && c.env.ACCESS_AUD && c.env.ALLOWED_EMAIL) {
+  const accessAssertion = c.req.header("cf-access-jwt-assertion");
+  if (
+    accessAssertion &&
+    c.env.ACCESS_TEAM &&
+    c.env.ACCESS_AUD &&
+    c.env.ALLOWED_EMAIL
+  ) {
     try {
       const issuer = `https://${c.env.ACCESS_TEAM}.cloudflareaccess.com`;
       if (!/^[a-z0-9-]+$/.test(c.env.ACCESS_TEAM)) throw Error();
@@ -45,27 +60,22 @@ app.use("*", async (c, next) => {
         keysets.set(issuer, keys);
       }
       const { payload } = await jwtVerify(
-        c.req.header("cf-access-jwt-assertion") || "",
+        accessAssertion,
         keys,
         { issuer, audience: c.env.ACCESS_AUD },
       );
       const email =
         typeof payload.email === "string" ? payload.email.toLowerCase() : "";
       const adminEmail = c.env.ALLOWED_EMAIL.trim().toLowerCase();
-      const viewerEmails = (c.env.VIEWER_EMAILS || "")
-        .split(",")
-        .map((value) => value.trim().toLowerCase())
-        .filter(Boolean);
       if (email && email === adminEmail) role = "admin";
-      else if (email && viewerEmails.includes(email)) role = "viewer";
     } catch {
       /* fail closed */
     }
   }
-  if (!role) {
-    return c.json({ error: "UNAUTHORIZED" }, 401);
-  }
   c.set("role", role);
+  c.set("collectionApiAuthorized", collectionApiAuthorized);
+  if ((url.pathname === "/admin" || url.pathname === "/admin/") && role !== "admin")
+    return c.text("관리자 권한이 필요합니다.", 403);
   if (c.req.method === "POST" && c.req.header("origin") !== url.origin)
     return c.json({ error: "INVALID_ORIGIN" }, 403);
   c.header("Cache-Control", "no-store");
@@ -74,14 +84,17 @@ app.use("*", async (c, next) => {
 });
 app.use("/api/*", async (c, next) => {
   const path = new URL(c.req.url).pathname;
-  const keywordSettingsUpdate =
+  const visitorKeywordUpdate =
     c.req.method === "POST" && path === "/api/settings/keywords";
+  if (path.startsWith("/api/admin/") && c.get("role") !== "admin")
+    return c.json({ error: "ADMIN_ACCESS_REQUIRED" }, 403);
   if (
     c.get("role") !== "admin" &&
-    ((c.req.method !== "GET" && !keywordSettingsUpdate) ||
-      path === "/api/imports" ||
-      path.startsWith("/api/imports/") ||
-      path.startsWith("/api/collector/"))
+    ((c.req.method !== "GET" &&
+      !visitorKeywordUpdate &&
+      !c.get("collectionApiAuthorized")) ||
+      ((path === "/api/imports" || path.startsWith("/api/imports/")) &&
+        !c.get("collectionApiAuthorized")))
   )
     return c.json({ error: "FORBIDDEN" }, 403);
   await next();
@@ -102,6 +115,7 @@ app.onError((err, c) => {
 });
 app.get("/api/health", (c) => c.json({ ok: true, schedule: scheduleStatus }));
 app.get("/api/me", (c) => c.json({ role: c.get("role") }));
+app.get("/api/admin/session", (c) => c.json({ role: c.get("role") }));
 app.get("/api/settings/keywords", async (c) =>
   c.json(await loadKeywordRules(c.env.DB)),
 );
@@ -114,7 +128,7 @@ app.post("/api/settings/keywords", async (c) => {
     .run();
   return c.json({ saved: true });
 });
-app.route("/api/collector", collector);
+app.route("/api/admin/collector", collector);
 app.get("/api/categories", async (c) =>
   c.json(
     (
@@ -124,7 +138,7 @@ app.get("/api/categories", async (c) =>
     ).results,
   ),
 );
-app.get("/api/imports", async (c) => {
+app.get("/api/admin/imports", async (c) => {
   const offset = z.coerce
     .number()
     .int()
@@ -340,7 +354,7 @@ app.post("/api/imports/:id/complete", async (c) => {
     return c.json({ error: "IMPORT_NOT_OPEN" }, 409);
   return c.json({ status: "COMPLETE" });
 });
-app.post("/api/imports/:id/cancel", async (c) => {
+app.on("POST", ["/api/imports/:id/cancel", "/api/admin/imports/:id/cancel"], async (c) => {
   const id = idSchema.parse(c.req.param("id"));
   const p = z
     .object({ failed: z.boolean().default(false) })

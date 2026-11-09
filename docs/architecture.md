@@ -16,7 +16,7 @@
 
 ## 보안
 
-Static Assets의 `run_worker_first: true`로 UI·다운로드·API 모두 인증합니다. 원격 환경은 Access JWT 서명, issuer, audience, 이메일을 jose/JWKS로 검증합니다. 환경변수가 빠지면 거부합니다. Cloudflare Access의 Worker-level 정책도 실제 배포 전에 설정해야 합니다. 로컬 토큰은 localhost/127.0.0.1에서만 허용하며 일반 원격 호스트에서는 같은 토큰을 보내도 거부합니다. 로컬 로그인 쿠키는 HttpOnly/SameSite=Strict입니다. 원격 HTTP에서 로컬 인증을 사용하지 않으며 토큰 파일은 Git에서 제외됩니다.
+Static Assets의 `run_worker_first: true`로 화면/API 요청은 Worker를 거칩니다. 일반 화면과 조회 API는 비로그인 사용자에게 열려 있습니다. 성분 키워드 설정은 방문자도 수정할 수 있고 Origin을 검증합니다. 나머지 데이터 변경 요청은 관리자 Access JWT 또는 예약 수집용 API 키가 있어야 합니다. 관리자 화면 진입(`/admin`)과 관리자 API(`/api/admin/*`)는 Cloudflare Access의 경로별 보호를 사용하며 Worker는 Access JWT 서명, issuer, audience, 관리자 이메일을 jose/JWKS로 검증합니다. Worker 전체에 Access를 적용하지 않습니다. 예약 수집용 `/api/imports*`는 별도 Service Auth 정책과 API 키를 모두 요구합니다. 로컬 토큰은 localhost/127.0.0.1에서만 허용하며 일반 원격 호스트에서는 같은 토큰을 보내도 거부합니다. 로컬 로그인 쿠키는 HttpOnly/SameSite=Strict입니다. 원격 HTTP에서 로컬 인증을 사용하지 않으며 토큰 파일은 Git에서 제외됩니다.
 
 POST는 현재 요청 origin과 Origin 헤더가 일치해야 합니다. 토큰 기반 로컬 테스트도 Origin을 명시합니다. 입력은 Zod로 검증하고 400, 인증 401, Origin 403, 상태/DB 충돌 409, 불완전 순위 422, 본문 초과 413을 반환합니다. DB 원문 오류는 서버 로그에만 기록하고 응답에는 담지 않습니다. 현재 DB 오류 응답은 409로 통합되어 있으므로 운영용 장애 코드 세분화는 후속 개선입니다.
 

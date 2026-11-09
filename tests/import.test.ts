@@ -219,7 +219,7 @@ describe.sequential("실제 로컬 D1 (Miniflare)", () => {
     expect(
       ((await (await req("/api/categories")).json()) as unknown[]).length,
     ).toBe(22));
-  it("로컬 UI/API는 토큰 없이 열리고 배포 주소는 위조 JWT를 거부", async () => {
+  it("로컬 UI/API는 토큰 없이 열리고 배포 주소에서 위조 JWT는 조회 권한만 받음", async () => {
     for (const p of ["/", "/api/categories"]) {
       expect(
         (await app.request("http://localhost" + p, {}, env())).status,
@@ -237,7 +237,7 @@ describe.sequential("실제 로컬 D1 (Miniflare)", () => {
             env(),
           )
         ).status,
-      ).toBe(401);
+      ).toBe(200);
     }
   });
   it("다른 Origin 거부", async () =>
@@ -280,17 +280,17 @@ describe.sequential("실제 로컬 D1 (Miniflare)", () => {
     }
   });
   it("수집 이력은 정렬 순서를 유지하며 이전·다음 페이지로 조회", async () => {
-    const all = (await (await req("/api/imports")).json()) as { id: string }[];
+    const all = (await (await req("/api/admin/imports")).json()) as { id: string }[];
     expect(all.length).toBeGreaterThanOrEqual(2);
     const first = (await (
-      await req("/api/imports?offset=0&limit=1")
+      await req("/api/admin/imports?offset=0&limit=1")
     ).json()) as { id: string }[];
     const second = (await (
-      await req("/api/imports?offset=1&limit=1")
+      await req("/api/admin/imports?offset=1&limit=1")
     ).json()) as { id: string }[];
     expect(first[0].id).toBe(all[0].id);
     expect(second[0].id).toBe(all[1].id);
-    expect((await req("/api/imports?offset=0&limit=102")).status).toBe(400);
+    expect((await req("/api/admin/imports?offset=0&limit=102")).status).toBe(400);
   });
   it("동일 재업로드 멱등, 변경본 확인 요구", async () => {
     const base = {
