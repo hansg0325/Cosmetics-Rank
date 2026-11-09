@@ -234,6 +234,32 @@ article strong {
 .table-wrap {
   overflow: auto;
 }
+.ranking-results-count {
+  margin: 8px 0 -8px;
+  color: #78836d;
+  font-size: 11px;
+  text-align: right;
+}
+.ranking-sort-heading {
+  display: grid;
+  gap: 6px;
+  min-width: 94px;
+}
+.ranking-sort-buttons {
+  display: flex;
+  gap: 4px;
+}
+.ranking-sort-button {
+  padding: 3px 5px;
+  color: #66745a;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.ranking-sort-button[aria-pressed="true"] {
+  border-color: #789457;
+  background: #edf4e7;
+  color: #3f5e27;
+}
 .history-matrix {
   max-height: 70vh;
 }

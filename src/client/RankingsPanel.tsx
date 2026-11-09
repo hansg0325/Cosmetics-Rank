@@ -13,6 +13,9 @@ import { params, useData } from "./analyticsApi";
 import { RankChart, type RankSeries } from "./RankChart";
 export type Category = { code: string; display_name: string };
 export type OpenProduct = (id: string, category: string) => void;
+type RankingSortField = "rank" | "reviews" | "rating";
+type SortDirection = "asc" | "desc";
+type RankingSort = { field: RankingSortField; direction: SortDirection };
 export function MovementBadge({ entry }: { entry: ChangeEntry }) {
   const text =
     entry.movement === "UP"
@@ -32,11 +35,36 @@ export function RankingTable({
   items,
   onProduct,
   category,
+  sort,
+  onSort,
 }: {
   items: ChangeEntry[];
   onProduct: OpenProduct;
   category: string;
+  sort: RankingSort;
+  onSort: (field: RankingSortField, direction: SortDirection) => void;
 }) {
+  function sortButtons(field: RankingSortField, label: string) {
+    return (
+      <div className="ranking-sort-buttons">
+        {([
+          ["asc", "↑ 오름"],
+          ["desc", "↓ 내림"],
+        ] as const).map(([direction, text]) => (
+          <button
+            key={direction}
+            type="button"
+            className="ranking-sort-button"
+            aria-label={`${label} ${direction === "asc" ? "오름차순" : "내림차순"}`}
+            aria-pressed={sort.field === field && sort.direction === direction}
+            onClick={() => onSort(field, direction)}
+          >
+            {text}
+          </button>
+        ))}
+      </div>
+    );
+  }
   return (
     <div className="table-wrap">
       <table className="ranking-table">
@@ -50,8 +78,18 @@ export function RankingTable({
             <th>상품명</th>
             <th>제조업자, 판매업자</th>
             <th>키워드</th>
-            <th>리뷰 수</th>
-            <th>평점 (5점)</th>
+            <th>
+              <div className="ranking-sort-heading">
+                <span>리뷰 수</span>
+                {sortButtons("reviews", "리뷰 수")}
+              </div>
+            </th>
+            <th>
+              <div className="ranking-sort-heading">
+                <span>평점 (5점)</span>
+                {sortButtons("rating", "평점")}
+              </div>
+            </th>
             <th>링크</th>
           </tr>
         </thead>
@@ -211,7 +249,8 @@ export function RankingsPanel({
   const [category, setCategory] = useState("overall"),
     [chosenDate, setDate] = useState(""),
     [search, setSearch] = useState(""),
-    [filter, setFilter] = useState("ALL");
+    [filter, setFilter] = useState("ALL"),
+    [sort, setSort] = useState<RankingSort>({ field: "rank", direction: "asc" });
   const dates = useData<{ dates: string[] }>(
     "dates?" + params({ category, v: revision }),
   );
@@ -246,7 +285,27 @@ export function RankingsPanel({
         matchesProductSearch(r, needle) &&
         (filter === "ALL" || r.movement === filter),
     )
-    .sort((a, b) => (a.rank ?? 101) - (b.rank ?? 101));
+    .sort((a, b) => {
+      const left =
+          sort.field === "rank"
+            ? a.rank
+            : sort.field === "reviews"
+              ? a.review_count_at_capture
+              : a.rating_at_capture,
+        right =
+          sort.field === "rank"
+            ? b.rank
+            : sort.field === "reviews"
+              ? b.review_count_at_capture
+              : b.rating_at_capture;
+      if (left == null && right == null) return (a.rank ?? 101) - (b.rank ?? 101);
+      if (left == null) return 1;
+      if (right == null) return -1;
+      const difference = Number(left) - Number(right);
+      if (difference !== 0)
+        return sort.direction === "asc" ? difference : -difference;
+      return (a.rank ?? 101) - (b.rank ?? 101);
+    });
   return (
     <>
       {!chartOnly && (
@@ -340,11 +399,20 @@ export function RankingsPanel({
               ) : (
                 <>
                   {!chartOnly && (
-                    <RankingTable
-                      items={items}
-                      category={category}
-                      onProduct={onProduct}
-                    />
+                    <>
+                      <p className="ranking-results-count">
+                        현재 표시 상품 {items.length}개
+                      </p>
+                      <RankingTable
+                        items={items}
+                        category={category}
+                        onProduct={onProduct}
+                        sort={sort}
+                        onSort={(field, direction) =>
+                          setSort({ field, direction })
+                        }
+                      />
+                    </>
                   )}
                 </>
               )}
