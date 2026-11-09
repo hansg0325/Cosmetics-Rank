@@ -36,6 +36,6 @@ Python 수집기 테스트는 `tests/test_*.py`에 있습니다. `pnpm test:smok
 
 ## 배포 상태
 
-Cloudflare Worker와 원격 D1은 배포되어 있습니다. 일반 방문자는 로그인 없이 조회하고, `/admin`과 `/api/admin/*`는 Cloudflare Access로 관리자만 접근하도록 구성합니다. Actions 수집은 `/api/imports*`의 Service Auth와 API 키를 사용합니다. 현재 소스 변경은 이 경로별 Access 정책 적용 후 재배포해야 live 사이트에 반영됩니다. 절차와 제한은 [운영 가이드](docs/operations.md)를 참고하세요.
+Cloudflare Worker와 원격 D1은 배포되어 있습니다. 일반 방문자는 로그인 없이 조회하고 성분 키워드를 편집할 수 있습니다. `/admin`과 `/api/admin/*`에는 Cloudflare Access가 적용되며 Worker가 관리자 이메일을 확인합니다. Actions 수집은 `/api/imports` 및 하위 경로에서 Service Auth와 API 키를 사용합니다. 절차와 제한은 [운영 가이드](docs/operations.md)를 참고하세요.
 
 Git에는 소스와 마이그레이션만 포함합니다. `.dev.vars`, `.wrangler/`, `data/`, `.local-browser/`, `dist/`는 제외합니다. 로컬 DB는 GitHub에 올라가지 않습니다.

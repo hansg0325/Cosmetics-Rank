@@ -10,10 +10,10 @@ README 빠른 시작을 따릅니다. `.dev.vars.example`은 형식 예시이고
 
 1. Cloudflare Workers Free / D1 Free / Zero Trust Access Free 계정에서 시작합니다. 유료 플랜이나 카드 등록을 요구하는 기능을 추가하지 않습니다.
 2. `pnpm exec wrangler login`으로 계정에 로그인합니다. APAC 리전의 원격 D1 `cosmetics-rank`는 생성됐고 반환된 ID를 `wrangler.jsonc`에 설정했습니다. 새 Cloudflare 계정에서 다시 배포할 경우 해당 계정의 D1을 새로 만들어 ID를 교체해야 합니다.
-3. Cloudflare Access에서 Worker 전체 보호는 사용하지 않습니다. 다음 경로에만 Access 앱을 둡니다.
-   - `cosmetics-rank.hansg0325.workers.dev/admin` 및 `/api/admin/*`: 관리자 이메일 하나만 허용합니다.
-   - `cosmetics-rank.hansg0325.workers.dev/api/imports*`: 관리자 이메일과 수집용 Service Auth 토큰을 허용합니다. Actions에는 Service Auth 자격 증명과 `COLLECTION_API_KEY`가 모두 필요합니다.
-   일반 사이트와 조회 API는 로그인 없이 열고, 쓰기 API는 Worker에서 거부하는지 확인합니다. Access path 앱을 설정한 뒤 Worker-level Access 보호를 해제해야 경로별 보호가 적용됩니다.
+3. 기존 Cloudflare Access 앱의 Worker 대상은 미리보기 URL로 제한하고, 운영 호스트에는 아래 경로를 공개 호스트 대상에 추가합니다.
+   - `/admin`, `/api/admin/*`: Access 로그인 후 Worker가 관리자 이메일을 확인합니다.
+   - `/api/imports`, `/api/imports/*`: 기존 수집용 Service Auth 정책을 유지합니다. Actions에는 Service Auth 자격 증명과 `COLLECTION_API_KEY`가 모두 필요합니다.
+   일반 사이트, 조회 API, 키워드 저장은 Access 로그인 없이 사용합니다. 이외의 변경은 Worker에서 권한을 확인합니다.
 4. `ACCESS_TEAM`(팀 슬러그), `ACCESS_AUD`(관리자 경로 Access 앱 audience), `ALLOWED_EMAIL`(관리자 이메일)을 Worker secret으로 설정합니다. `VIEWER_EMAILS`는 사용하지 않습니다. 로컬 토큰을 원격 secret으로 등록하지 마세요. `/api/admin/*`는 유효한 관리자 JWT가 없으면 거부됩니다.
 5. `pnpm exec wrangler d1 migrations apply cosmetics-rank --remote`, `pnpm build`, `pnpm exec wrangler deploy` 순서로 배포합니다.
 6. 시크릿 브라우저에서 루트/GET API가 로그인 없이 조회되는지, 변경 API가 거부되는지, 관리자 탭 클릭 시 Cloudflare 로그인으로 이동하는지, 비관리자 이메일은 관리자 기능에 들어갈 수 없는지, GitHub Actions Service Auth로 수집만 가능한지 확인합니다. 로컬 검증은 원격 Access 정책 검증을 대신하지 않습니다.

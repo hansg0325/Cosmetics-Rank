@@ -7,7 +7,7 @@ The repository's self-hosted Windows runner on the local PC collects all configu
 1. Generate a random 32-byte COLLECTION_API_KEY locally. Never commit it.
 2. Run `pnpm exec wrangler secret put COLLECTION_API_KEY` and enter that value. Build and deploy this Worker using `pnpm build` and `pnpm exec wrangler deploy`.
 3. Cloudflare Zero Trust > Access controls > Service credentials: create a service token for the collector. Save its client ID and secret.
-4. Create a separate Access application scoped to `cosmetics-rank.hansg0325.workers.dev/api/imports*`. Add a Service Auth policy with Include > Service Token set to this token. The Worker separately checks `COLLECTION_API_KEY` and only permits import writes for this credential. Do not add this Service Auth policy to the `/admin` application.
+4. In the existing Access application, protect `/api/imports` and `/api/imports/*` and keep the Service Auth policy for this token. The Worker separately checks `COLLECTION_API_KEY` for import writes. This credential does not grant administrator permissions in the Worker.
 5. Repository Settings > Secrets and variables > Actions: register COLLECTION_API_KEY, CF_ACCESS_CLIENT_ID, CF_ACCESS_CLIENT_SECRET.
 6. Add the local Windows PC as a repository self-hosted runner with the `cosmetics-rank` label. Keep the PC awake and signed in for scheduled runs.
 7. Push the workflow to the default branch. Actions > Daily ranking collection > Run workflow. Confirm all categories succeeded and check administrator collection history.
