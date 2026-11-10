@@ -160,6 +160,7 @@ def collect_category(category, rules, categories):
         [sys.executable, "-u", "scripts/collect-rankings.py", "--category", category],
         input=json.dumps(rules), text=True, encoding="utf-8", capture_output=True,
         cwd=ROOT, timeout=7200,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
     output_lines = result.stdout.splitlines()
     for line in output_lines:

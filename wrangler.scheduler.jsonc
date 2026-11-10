@@ -8,16 +8,23 @@
   "observability": { "enabled": true },
   "vars": { "SCHEDULER_MODE": "collection" },
   "triggers": { "crons": ["0 21 * * *"] },
+  "queues": {
+    "producers": [{ "binding": "COLLECTION_QUEUE", "queue": "cosmetics-rank-collection" }]
+  },
   "env": {
     "setup": {
       "name": "cosmetics-rank-scheduler",
       "vars": { "SCHEDULER_MODE": "setup" },
-      "triggers": { "crons": [] }
+      "triggers": { "crons": [] },
+      "queues": { "producers": [] }
     },
     "smoke": {
       "name": "cosmetics-rank-scheduler",
       "vars": { "SCHEDULER_MODE": "smoke" },
-      "triggers": { "crons": ["*/5 * * * *"] }
+      "triggers": { "crons": ["*/5 * * * *"] },
+      "queues": {
+        "producers": [{ "binding": "COLLECTION_QUEUE", "queue": "cosmetics-rank-collection" }]
+      }
     }
   }
 }

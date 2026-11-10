@@ -1,25 +1,22 @@
-# GitHub Actions daily collection
+# Automatic ranking collection
 
-The `cosmetics-rank-scheduler` Cloudflare Worker requests collection at 06:00 KST (21:00 UTC). GitHub Actions then assigns the job to an online self-hosted Windows runner with the `cosmetics-rank` label. The runner needs Python and Chrome access and its PC must remain awake until collection finishes. The website and D1 remain on Cloudflare.
+At 06:00 KST (21:00 UTC), the `cosmetics-rank-scheduler` Worker enqueues an all-category collection job in `cosmetics-rank-collection`. Windows Task Scheduler checks the queue every minute and starts the existing Python and Chrome collector. The collector saves snapshots through the site's existing authenticated API.
 
-## Configure the collector
+The PC must be awake and the Windows user who configured the collector must be signed in. Locking the screen is fine. If the PC comes online later the same day, the queued job can still run. Previous dates are discarded because the collector reads live rankings. On Workers Free the queue retains messages for 24 hours.
 
-1. Generate a random 32-byte COLLECTION_API_KEY locally. Never commit it.
-2. Run `pnpm exec wrangler secret put COLLECTION_API_KEY` and enter that value. Build and deploy this Worker using `pnpm build` and `pnpm exec wrangler deploy`.
-3. Cloudflare Zero Trust > Access controls > Service credentials: create a service token for the collector. Save its client ID and secret.
-4. In the existing Access application, protect `/api/imports` and `/api/imports/*` and keep the Service Auth policy for this token. The Worker separately checks `COLLECTION_API_KEY` for import writes. This credential does not grant administrator permissions in the Worker.
-5. Repository Settings > Secrets and variables > Actions: register COLLECTION_API_KEY, CF_ACCESS_CLIENT_ID, CF_ACCESS_CLIENT_SECRET.
-6. Add the local Windows PC as a repository self-hosted runner with the `cosmetics-rank` label. Confirm its service is running and can launch Chrome.
-7. Push the workflow to the default branch. Actions > Daily ranking collection > Run workflow. Confirm all categories succeeded and check administrator collection history.
+## One-time setup
 
-## Configure the Cloudflare scheduler
+1. Create `cosmetics-rank-collection` using `bash ./pnpmw exec wrangler queues create cosmetics-rank-collection --config wrangler.scheduler.jsonc`. Enable HTTP Pull with `bash ./pnpmw exec wrangler queues consumer http add cosmetics-rank-collection --config wrangler.scheduler.jsonc --batch-size 1 --visibility-timeout-secs 21600`. Find the queue ID with `wrangler queues info cosmetics-rank-collection`.
+2. Create a Cloudflare API token with `Account → Queues → Edit`, scoped to the queue's account. Have the existing upload credentials ready: `COLLECTION_API_KEY`, `CF_ACCESS_CLIENT_ID`, and `CF_ACCESS_CLIENT_SECRET`.
+3. On the collector PC, open PowerShell in the repository and run `python scripts/queue-collection.py --configure --account-id ACCOUNT_ID --queue-id QUEUE_ID` using the Python executable you will register for the task. It prompts for each secret and saves them encrypted for the current Windows account under `%LOCALAPPDATA%\CosmeticsRank`. Add `--smoke-only` if you only have the queue token. Rerun without `--smoke-only` before enabling production collection.
+4. From the same Windows account, run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\register-queue-collector.ps1 -PythonExe 'C:\path\to\python.exe'`. The script checks for Python and Selenium, then registers **Cosmetics Rank Queue Collector**. The task starts at sign-in and repeats every minute without opening a console or overlapping an active collection.
 
-1. Deploy the scheduler without a Cron Trigger using `bash ./pnpmw exec wrangler deploy --config wrangler.scheduler.jsonc --env setup`.
-2. Create a fine-grained GitHub token for `hansg0325/Cosmetics-Rank` with the repository permission `Actions: Read and write`. In the scheduler Worker's Settings, save it as a secret named `GITHUB_DISPATCH_TOKEN`.
-3. Deploy the test schedule using `bash ./pnpmw exec wrangler deploy --config wrangler.scheduler.jsonc --env smoke`. It dispatches the log-only workflow every five minutes. Cron configuration may take up to 15 minutes to propagate.
-4. Check the Worker's `github_dispatch_accepted` log and the corresponding **Schedule smoke test** run in GitHub. Confirm both the hosted and Windows jobs print `SCHEDULE_TEST_OK`. The GitHub event is `workflow_dispatch` because Cloudflare triggers it through the API.
-5. Switch the same Worker to the daily schedule using `bash ./pnpmw exec wrangler deploy --config wrangler.scheduler.jsonc --env=""`. This dispatches **Daily ranking collection** with `category=all` at 06:00 KST. The scheduler ignores events for a previous Cron Trigger during configuration propagation.
+## Verify and enable the schedule
 
-The Worker log records the requested time and GitHub run ID when available. Check the GitHub run and collection history to confirm that the runner actually collected and saved the data. An offline runner can delay the start after GitHub accepts the request. To pause automatic collection, deploy `--env setup` again. Replace the GitHub token secret before it expires.
+1. Deploy `bash ./pnpmw exec wrangler deploy --config wrangler.scheduler.jsonc --env smoke`. The Worker enqueues a log-only job every five minutes. Cloudflare can take up to 15 minutes to propagate a Cron Trigger change.
+2. Confirm the Worker logged `collection_job_enqueued` and `%LOCALAPPDATA%\CosmeticsRank\queue-collector.log` has a matching `queue_job_completed` entry with a `smoke:` job ID.
+3. Deploy `bash ./pnpmw exec wrangler deploy --config wrangler.scheduler.jsonc --env=""` to activate the 06:00 KST collection schedule. Confirm the next job starts and saves all categories in the local log and site collection history.
 
-Manual collection remains available from GitHub Actions. Logs print category results without credentials or product payloads. Failed snapshots are not published, and successfully collected categories remain available if another category fails. The job times out after 300 minutes.
+The collector records completed attempts before acknowledging the queue message, so redelivery on the same PC does not restart an already recorded attempt. A failed attempt is logged with its exit code. If the PC shuts down mid-run, the unacknowledged message can become available again when its lease expires.
+
+To pause automatic collection, deploy `--env setup` and disable the Windows task if it must stop consuming existing messages. The GitHub `workflow_dispatch` entry remains available for manual collection.
