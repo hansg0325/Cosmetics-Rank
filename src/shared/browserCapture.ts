@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { day, validateRows, keywordsSchema } from "./schemas";
+import {
+  day,
+  detailSummarySchema,
+  validateRows,
+  keywordsSchema,
+} from "./schemas";
 import collectionCategories from "./collectionCategories.json";
 export const collectionCategorySchema = z.enum(
   Object.keys(collectionCategories) as [
@@ -16,6 +21,7 @@ export const browserCaptureSchema = z
     collected_at: z.string().datetime(),
     ranking_date: day,
     category_code: collectionCategorySchema,
+    detail_summary: detailSummarySchema.optional(),
     rows: z
       .array(
         z

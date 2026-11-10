@@ -174,6 +174,7 @@ describe.sequential("실제 로컬 D1 (Miniflare)", () => {
       "migrations/0009_ingredient_keywords.sql",
       "migrations/0010_keyword_replay_guard.sql",
       "migrations/0011_keyword_settings.sql",
+      "migrations/0012_detail_collection_summary.sql",
     ]) {
       const sql = readFileSync(path, "utf8").replace(/^\s*--.*$/gm, "");
       for (const statement of (/(?:000[2468]|0010)/.test(path)

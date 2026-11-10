@@ -307,6 +307,34 @@ th {
   border-radius: 4px;
   padding: 5px 8px;
 }
+.badge.status-COMPLETE {
+  color: #46632b;
+  background: #eaf3df;
+}
+.badge.status-FAILED {
+  color: #a53a31;
+  background: #ffefed;
+}
+.badge.status-PARTIAL {
+  color: #825913;
+  background: #fff3d8;
+}
+.badge.status-RUNNING {
+  color: #30568a;
+  background: #edf4ff;
+}
+.badge.status-CANCELLED,
+.badge.status-NOT_COLLECTED,
+.badge.status-UNKNOWN {
+  color: #69717b;
+  background: #f0f2f4;
+}
+.detail-coverage {
+  display: block;
+  margin-top: 7px;
+  color: #727b6a;
+  font-size: 11px;
+}
 .empty {
   text-align: center;
   padding: 25px;

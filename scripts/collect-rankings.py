@@ -49,4 +49,6 @@ capture = {"format": "cosmetics-rank-browser-v1", "source_url": source,
            "collected_at": now.isoformat(timespec="milliseconds").replace("+00:00", "Z"),
            "ranking_date": now.astimezone(timezone(timedelta(hours=9))).date().isoformat(),
            "category_code": category, "rows": result["products"]}
+if result.get("detail_summary") is not None:
+    capture["detail_summary"] = result["detail_summary"]
 print("COSMETICS_RANK_CAPTURE " + json.dumps(capture, ensure_ascii=False), flush=True)

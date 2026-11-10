@@ -25,6 +25,10 @@ type Run = {
   entry_count: number;
   is_active: number;
   source_ref: string;
+  detail_status: string;
+  detail_total: number;
+  detail_succeeded: number;
+  detail_access_limited: number;
 };
 async function api<T = unknown>(path: string, body?: unknown): Promise<T> {
   const r = await fetch(
@@ -139,6 +143,9 @@ function App() {
             source_ref: "selenium:" + hash,
             replace: true,
             source_type: "MANUAL",
+            ...(inputCapture.detail_summary
+              ? { detail_summary: inputCapture.detail_summary }
+              : {}),
           },
         );
         if (!run.already_complete) {
@@ -386,7 +393,8 @@ function App() {
                     <th>수집 일시 (KST)</th>
                     <th>카테고리</th>
                     <th>저장 행</th>
-                    <th>상태</th>
+                    <th>랭킹 상태</th>
+                    <th>상세 조회</th>
                     <th>입력 경로</th>
                     <th>활성</th>
                   </tr>
@@ -398,7 +406,39 @@ function App() {
                       <td>{r.category_code}</td>
                       <td>{r.entry_count}/100</td>
                       <td>
-                        <span className="badge">{r.status}</span>
+                        <span className={`badge status-${r.status}`}>
+                          {r.status === "COMPLETE"
+                            ? "랭킹 완료"
+                            : r.status === "FAILED"
+                              ? "랭킹 실패"
+                              : r.status === "RUNNING"
+                                ? "수집 중"
+                                : r.status === "PARTIAL"
+                                  ? "부분 성공"
+                                : r.status === "CANCELLED"
+                                  ? "취소"
+                                  : r.status}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`badge status-${r.detail_status}`}>
+                          {r.detail_status === "COMPLETE"
+                            ? "상세 완료"
+                            : r.detail_status === "PARTIAL"
+                              ? "상세 부분 실패"
+                              : r.detail_status === "FAILED"
+                                ? "상세 실패"
+                                : r.detail_status === "NOT_COLLECTED"
+                                  ? "미수집"
+                                  : "기록 없음"}
+                        </span>
+                        {r.detail_total > 0 && (
+                          <small className="detail-coverage">
+                            {r.detail_succeeded}/{r.detail_total} 성공
+                            {r.detail_access_limited > 0 &&
+                              ` · 접속 제한 ${r.detail_access_limited}`}
+                          </small>
+                        )}
                       </td>
                       <td>
                         {r.source_ref?.startsWith("selenium:")

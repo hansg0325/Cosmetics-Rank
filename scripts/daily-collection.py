@@ -227,6 +227,8 @@ def save_snapshot(category, capture, rows):
         "replace": True,
         "source_ref": source_ref,
     }
+    if capture.get("detail_summary") is not None:
+        start_payload["detail_summary"] = capture["detail_summary"]
     run_ids = set()
     for save_attempt in range(1, SNAPSHOT_SAVE_ATTEMPTS + 1):
         run_id = None

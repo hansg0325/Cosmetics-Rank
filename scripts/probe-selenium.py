@@ -223,7 +223,9 @@ def probe(kind, source, chrome_binary, category_code=None, category_name=None):
         if kind == "overall" and result["valid"]:
             stage = "product_detail_enrichment"
             time.sleep(RANKING_TO_DETAILS_DELAY_SECONDS)
-            enrich_product_details(driver, result["products"], category_code=category_code)
+            result["detail_summary"] = enrich_product_details(
+                driver, result["products"], category_code=category_code
+            )
         if kind == "product" and not result["valid"]:
             result["selector_diagnostics"] = driver.execute_script("""
               const expected=document.title.replace(/\\s*\\|\\s*올리브영.*$/,'').trim();

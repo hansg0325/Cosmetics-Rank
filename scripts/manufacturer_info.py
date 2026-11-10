@@ -178,6 +178,11 @@ def enrich_product_details(driver, rows, category_code=None):
         (path.parent / "product-detail-progress.json").write_text(json.dumps(progress), encoding="utf-8")
         (path.parent / "product-detail-diagnostics.json").write_text(json.dumps(diagnostics, ensure_ascii=False), encoding="utf-8")
         path.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
+    return {
+        "total": len(rows),
+        "succeeded": sum(item.get("status") in {"READ", "CACHE"} for item in diagnostics),
+        "access_limited": sum(item.get("status") == "ACCESS_LIMIT" for item in diagnostics),
+    }
 
 
 # Compatibility for local diagnostic scripts; collection uses the unified name.

@@ -243,6 +243,29 @@ app.route("/api", analytics);
 app.post("/api/imports", async (c) => {
   const p = startSchema.parse(await c.req.json());
   const db = c.env.DB;
+  const detail = p.detail_summary;
+  const detailStatus = !detail || detail.total === 0
+    ? "NOT_COLLECTED"
+    : detail.succeeded === detail.total
+      ? "COMPLETE"
+      : detail.succeeded === 0
+        ? "FAILED"
+        : "PARTIAL";
+  const updateDetailSummary = async (runId: string) => {
+    if (!detail) return;
+    await db
+      .prepare(
+        "UPDATE ingestion_runs SET detail_status=?,detail_total=?,detail_succeeded=?,detail_access_limited=? WHERE id=?",
+      )
+      .bind(
+        detailStatus,
+        detail.total,
+        detail.succeeded,
+        detail.access_limited,
+        runId,
+      )
+      .run();
+  };
   if (
     !(await db
       .prepare("SELECT code FROM categories WHERE code=? AND is_active=1")
@@ -257,12 +280,14 @@ app.post("/api/imports", async (c) => {
     .bind(p.ranking_date, p.category_code)
     .first<{ id: number; ingestion_run_id: string; source_ref: string }>();
   if (active) {
-    if (active.source_ref === p.source_ref)
+    if (active.source_ref === p.source_ref) {
+      await updateDetailSummary(active.ingestion_run_id);
       return c.json({
         id: active.ingestion_run_id,
         snapshot_id: active.id,
         already_complete: true,
       });
+    }
     if (!p.replace)
       return c.json({ error: "REPLACEMENT_CONFIRMATION_REQUIRED" }, 409);
   }
@@ -273,6 +298,7 @@ app.post("/api/imports", async (c) => {
     .bind(p.ranking_date, p.category_code, p.source_ref, p.source_type)
     .first<{ snapshot_id: number; id: string }>();
   if (resumable) {
+    await updateDetailSummary(resumable.id);
     return c.json({
       id: resumable.id,
       snapshot_id: resumable.snapshot_id,
@@ -284,9 +310,17 @@ app.post("/api/imports", async (c) => {
   await db.batch([
     db
       .prepare(
-        "INSERT INTO ingestion_runs(id,trigger_type,status,source_ref) VALUES(?,?,'RUNNING',?)",
+        "INSERT INTO ingestion_runs(id,trigger_type,status,source_ref,detail_status,detail_total,detail_succeeded,detail_access_limited) VALUES(?,?,'RUNNING',?,?,?,?,?)",
       )
-      .bind(id, p.source_type, p.source_ref),
+      .bind(
+        id,
+        p.source_type,
+        p.source_ref,
+        detailStatus,
+        detail?.total ?? 0,
+        detail?.succeeded ?? 0,
+        detail?.access_limited ?? 0,
+      ),
     db
       .prepare(
         "INSERT INTO snapshots(ranking_date,category_code,version,ingestion_run_id,source_type,source_ref,collected_at) SELECT ?,?,COALESCE(MAX(version),0)+1,?,?,?,? FROM snapshots WHERE ranking_date=? AND category_code=?",

@@ -61,6 +61,25 @@ export const rowSchema = z
   })
   .strict();
 export type RankingRow = z.infer<typeof rowSchema>;
+export const detailSummarySchema = z
+  .object({
+    total: z.number().int().min(0).max(100),
+    succeeded: z.number().int().min(0).max(100),
+    access_limited: z.number().int().min(0).max(100),
+  })
+  .strict()
+  .superRefine((summary, ctx) => {
+    if (summary.succeeded > summary.total)
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "세부 조회 성공 수가 전체 수보다 많습니다",
+      });
+    if (summary.access_limited > summary.total - summary.succeeded)
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "접속 제한 수가 세부 조회 실패 수보다 많습니다",
+      });
+  });
 export const startSchema = z
   .object({
     ranking_date: day,
@@ -69,6 +88,7 @@ export const startSchema = z
     source_ref: z.string().max(300),
     replace: z.boolean().default(false),
     source_type: z.enum(["MANUAL", "FIXTURE"]).default("MANUAL"),
+    detail_summary: detailSummarySchema.optional(),
   })
   .strict();
 export function validateRows(input: unknown[]): RankingRow[] {
