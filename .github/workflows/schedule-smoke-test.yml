@@ -1,21 +1,40 @@
 name: Schedule smoke test
 
 on:
+  schedule:
+    - cron: '7-57/5 * * * *'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
+  log-github-schedule:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Log GitHub schedule event
+        env:
+          SCHEDULE_CRON: ${{ github.event.schedule }}
+        run: |
+          echo SCHEDULE_TEST_OK
+          printf 'Event: %s\nCron: %s\n' "$GITHUB_EVENT_NAME" "$SCHEDULE_CRON"
+          date -u '+UTC time: %Y-%m-%dT%H:%M:%SZ'
+
   log-scheduled-run:
     runs-on: [self-hosted, windows, x64, cosmetics-rank]
+    concurrency:
+      group: schedule-smoke-test-windows
+      cancel-in-progress: false
     timeout-minutes: 5
     steps:
       - name: Print success marker
+        env:
+          SCHEDULE_CRON: ${{ github.event.schedule }}
         shell: cmd
         run: |
           echo SCHEDULE_TEST_OK
-          echo The scheduled workflow ran successfully.
           echo Runner: %RUNNER_NAME%
           echo Event: %GITHUB_EVENT_NAME%
+          echo Cron: %SCHEDULE_CRON%
           echo Local time: %DATE% %TIME%
