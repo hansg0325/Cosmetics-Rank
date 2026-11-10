@@ -2,8 +2,8 @@ name: Schedule smoke test
 
 on:
   schedule:
-    # One-time test: 2026-11-10 10:10 Asia/Seoul (01:10 UTC).
-    - cron: '10 1 10 11 *'
+    # One-time retry: 2026-11-11 10:10 Asia/Seoul (01:10 UTC).
+    - cron: '10 1 11 11 *'
   workflow_dispatch:
 
 permissions:
@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Print success marker
-        shell: pwsh
+        shell: powershell
         run: |
           Write-Output "SCHEDULE_TEST_OK"
           Write-Output "The scheduled workflow ran successfully."
