@@ -392,7 +392,12 @@ export function RankingsPanel({
                         onProduct={onProduct}
                         sort={sort}
                         onSort={(field, direction) =>
-                          setSort({ field, direction })
+                          setSort((current) =>
+                            current.field === field &&
+                            current.direction === direction
+                              ? { field: "rank", direction: "asc" }
+                              : { field, direction },
+                          )
                         }
                       />
                     </>
