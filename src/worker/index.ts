@@ -266,6 +266,20 @@ app.post("/api/imports", async (c) => {
     if (!p.replace)
       return c.json({ error: "REPLACEMENT_CONFIRMATION_REQUIRED" }, 409);
   }
+  const resumable = await db
+    .prepare(
+      "SELECT s.id snapshot_id,r.id FROM snapshots s JOIN ingestion_runs r ON r.id=s.ingestion_run_id WHERE s.ranking_date=? AND s.category_code=? AND s.source_ref=? AND s.source_type=? AND s.status='IMPORTING' AND r.status='RUNNING' ORDER BY s.version DESC LIMIT 1",
+    )
+    .bind(p.ranking_date, p.category_code, p.source_ref, p.source_type)
+    .first<{ snapshot_id: number; id: string }>();
+  if (resumable) {
+    return c.json({
+      id: resumable.id,
+      snapshot_id: resumable.snapshot_id,
+      already_complete: false,
+      resumed: true,
+    });
+  }
   const id = crypto.randomUUID();
   await db.batch([
     db
