@@ -2,8 +2,8 @@ name: Schedule smoke test
 
 on:
   schedule:
-    # One-time test: 2026-11-10 21:35 Asia/Seoul (12:35 UTC).
-    - cron: '35 12 10 11 *'
+    # One-time test: 2026-11-10 21:50 Asia/Seoul (12:50 UTC).
+    - cron: '50 12 10 11 *'
   workflow_dispatch:
 
 permissions:
