@@ -1,8 +1,6 @@
 name: Schedule smoke test
 
 on:
-  schedule:
-    - cron: '10 14 * * *' # 23:10 KST
   workflow_dispatch:
 
 permissions:
