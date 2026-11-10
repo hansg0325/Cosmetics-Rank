@@ -2,8 +2,8 @@ name: Schedule smoke test
 
 on:
   schedule:
-    # Temporary daily smoke test at 11:10 Asia/Seoul (02:10 UTC).
-    - cron: '10 2 * * *'
+    # One-time test: 2026-11-10 21:35 Asia/Seoul (12:35 UTC).
+    - cron: '35 12 10 11 *'
   workflow_dispatch:
 
 permissions:
@@ -15,9 +15,10 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Print success marker
-        shell: powershell
+        shell: cmd
         run: |
-          Write-Output "SCHEDULE_TEST_OK"
-          Write-Output "The scheduled workflow ran successfully."
-          Write-Output "Runner: $env:RUNNER_NAME"
-          Write-Output "Event: $env:GITHUB_EVENT_NAME"
+          echo SCHEDULE_TEST_OK
+          echo The scheduled workflow ran successfully.
+          echo Runner: %RUNNER_NAME%
+          echo Event: %GITHUB_EVENT_NAME%
+          echo Local time: %DATE% %TIME%
