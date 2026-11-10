@@ -264,9 +264,16 @@ function App() {
   return (
     <div className="shell">
       <header className="app-header">
-        <a className="logo" href="/">
-          cosmetics <span>rank</span>
-        </a>
+        <div className="brand-lockup">
+          <a className="logo" href="/">
+            cosmetics <span>rank</span>
+          </a>
+          <img
+            className="company-logo"
+            src="/mark-teams-logo.png"
+            alt="MARK & TEAMS · Global Cosmetics Full Service"
+          />
+        </div>
         <nav aria-label="주 메뉴">
           {[
             "대시보드",

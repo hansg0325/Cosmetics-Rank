@@ -53,13 +53,25 @@ a {
   z-index: 20;
   display: flex;
   align-items: center;
-  gap: 36px;
+  gap: clamp(12px, 2.5vw, 36px);
   background: #fff;
   border-bottom: 1px solid #e3e7dd;
   padding: 18px 32px;
 }
+.brand-lockup {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+}
 .app-header .logo {
   flex: 0 0 auto;
+}
+.company-logo {
+  display: block;
+  width: 84px;
+  height: auto;
+  object-fit: contain;
 }
 .logo {
   font-size: 29px;
@@ -1585,6 +1597,12 @@ main {
   .app-header .logo {
     font-size: 23px;
     white-space: nowrap;
+  }
+  .brand-lockup {
+    gap: 7px;
+  }
+  .company-logo {
+    width: 62px;
   }
   .app-header nav {
     grid-column: 1 / -1;
