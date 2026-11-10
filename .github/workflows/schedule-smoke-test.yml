@@ -4,6 +4,7 @@ on:
   schedule:
     # One-time test: 2026-11-10 10:10 Asia/Seoul (01:10 UTC).
     - cron: '10 1 10 11 *'
+  workflow_dispatch:
 
 permissions:
   contents: read
