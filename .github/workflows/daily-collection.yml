@@ -28,6 +28,9 @@ jobs:
   collect:
     runs-on: [self-hosted, windows, x64, cosmetics-rank]
     timeout-minutes: 300
+    defaults:
+      run:
+        shell: cmd
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -40,6 +43,6 @@ jobs:
           COLLECTION_API_KEY: ${{ secrets.COLLECTION_API_KEY }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
-          COLLECTION_CATEGORY: ${{ github.event_name == 'schedule' && 'all' || inputs.category || 'all' }}
+          COLLECTION_CATEGORY: ${{ inputs.category }}
           PYTHONIOENCODING: utf-8
         run: python scripts/daily-collection.py
