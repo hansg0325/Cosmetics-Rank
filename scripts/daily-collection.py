@@ -29,7 +29,7 @@ class NoRedirect(HTTPRedirectHandler):
         return None
 
 OPENER = build_opener(NoRedirect)
-TRANSIENT_HTTP_STATUSES = {408, 425, 429, 500, 502, 503, 504}
+TRANSIENT_HTTP_STATUSES = {408, 425, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524}
 HEADERS = {
     # Cloudflare Browser Integrity Check blocks urllib's default Python User-Agent
     # on workers.dev; identify this scheduled client explicitly.
