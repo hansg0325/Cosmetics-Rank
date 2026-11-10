@@ -71,6 +71,12 @@ def validate_id(value):
     return value.lower()
 
 
+def validate_queue_token(value):
+    if not re.fullmatch(r"(?:cf(?:ut|at)_[A-Za-z0-9]{48}|[A-Za-z0-9_-]{40})", value):
+        raise ValueError("Invalid Cloudflare queue token. Paste only the API token; keyboard control characters are not accepted.")
+    return value
+
+
 def default_config():
     return Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "CosmeticsRank" / "queue-collector.json"
 
@@ -86,9 +92,13 @@ def configure(path, account_id, queue_id, smoke_only):
         hint = " (Enter to keep the saved value)" if name in secrets else ""
         value = getpass.getpass(f"{name}{hint}: ").strip()
         if value:
+            if name == QUEUE_SECRET:
+                validate_queue_token(value)
             secrets[name] = base64.b64encode(protect(value.encode())).decode("ascii")
         elif name not in secrets:
             raise ValueError(f"{name} is required")
+        elif name == QUEUE_SECRET:
+            validate_queue_token(protect(base64.b64decode(secrets[name], validate=True), decrypt=True).decode())
     config = {"account_id": account_id, "queue_id": queue_id, "protected": secrets}
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(".tmp")
@@ -110,7 +120,7 @@ def load_config(path):
 class Queue:
     def __init__(self, account_id, queue_id, token):
         self.url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/queues/{queue_id}/messages"
-        self.token = token
+        self.token = validate_queue_token(token)
 
     def request(self, action, payload):
         request = Request(f"{self.url}/{action}", data=json.dumps(payload).encode(), method="POST",
