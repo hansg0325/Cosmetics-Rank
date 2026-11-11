@@ -10,6 +10,7 @@ import re
 import sqlite3
 import subprocess
 import sys
+from tempfile import TemporaryDirectory
 from contextlib import closing
 from ctypes import wintypes
 from datetime import datetime, timedelta, timezone
@@ -199,10 +200,18 @@ def run_collection(values, checkout):
     child_env = {**os.environ, **{name: values[name] for name in UPLOAD_SECRETS},
                  "COLLECTION_ORIGIN": COLLECTION_ORIGIN, "PYTHONIOENCODING": "utf-8"}
     try:
-        result = subprocess.run([sys.executable, "-u", "scripts/daily-collection.py", "--category", "all"],
-                                cwd=checkout, env=child_env, timeout=COLLECTOR_TIMEOUT,
-                                stdin=subprocess.DEVNULL, stdout=sys.stdout, stderr=subprocess.STDOUT,
-                                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        with TemporaryDirectory(prefix="cosmetics-rank-details-") as state_dir:
+            child_env["COSMETICS_RANK_DETAIL_STATE_DIR"] = state_dir
+            result = subprocess.run([sys.executable, "-u", "scripts/daily-collection.py", "--category", "all"],
+                                    cwd=checkout, env=child_env, timeout=COLLECTOR_TIMEOUT,
+                                    stdin=subprocess.DEVNULL, stdout=sys.stdout, stderr=subprocess.STDOUT,
+                                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        if result.returncode == 0:
+            for filename in (
+                "product-detail-cache.json", "product-detail-progress.json",
+                "product-detail-diagnostics.json", "product-detail-cooldown.json",
+            ):
+                (checkout / ".local-browser" / filename).unlink(missing_ok=True)
         return result.returncode
     except subprocess.TimeoutExpired:
         return 124
@@ -232,11 +241,11 @@ def missing_upload_credentials(mode, values):
 def run_pending(database, values, job_id, checkout, *, resumed):
     # Keep the write lock while the child is running, so another poll cannot run it concurrently.
     pending = database.execute(
-        "SELECT mode, scheduled_at FROM pending_jobs WHERE id = ?", (job_id,),
+        "SELECT mode, scheduled_at, acknowledged FROM pending_jobs WHERE id = ?", (job_id,),
     ).fetchone()
     if not pending:
         return 0
-    mode, scheduled_at = pending
+    mode, scheduled_at, acknowledged = pending
     if job_expired(mode, datetime.fromisoformat(scheduled_at)):
         database.execute("DELETE FROM pending_jobs WHERE id = ?", (job_id,))
         database.commit()
@@ -256,7 +265,8 @@ def run_pending(database, values, job_id, checkout, *, resumed):
         exit_code = run_collection(values, checkout)
     else:
         log("queue_job_resumed" if resumed else "queue_job_started", job_id)
-    database.execute("INSERT INTO jobs (id, exit_code) VALUES (?, ?)", (job_id, exit_code))
+    if not acknowledged:
+        database.execute("INSERT INTO jobs (id, exit_code) VALUES (?, ?)", (job_id, exit_code))
     database.execute("DELETE FROM pending_jobs WHERE id = ?", (job_id,))
     database.commit()
     log("queue_job_failed" if exit_code else "queue_job_completed", job_id, exitCode=exit_code)
@@ -264,13 +274,46 @@ def run_pending(database, values, job_id, checkout, *, resumed):
 
 
 def poll(path):
+    import msvcrt
+
+    # Keep the lock across SQLite close and deletion, including manual polls.
+    with path.with_name("queue-collector.lock").open("a+b") as lock:
+        lock.seek(0)
+        try:
+            msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+        except OSError as error:
+            if error.errno == 13:
+                return 0
+            raise
+        database_path = path.with_name("queue-jobs.sqlite3")
+        with closing(sqlite3.connect(database_path, timeout=0.5)) as database:
+            result = poll_database(path, database)
+            empty = not database.execute(
+                "SELECT EXISTS (SELECT 1 FROM pending_jobs) OR EXISTS (SELECT 1 FROM jobs)"
+            ).fetchone()[0]
+        if empty:
+            database_path.unlink(missing_ok=True)
+        return result
+
+
+def poll_database(path, database):
     account_id, queue_id, values = load_config(path)
     checkout = path.parent / "collector-source"
-    with closing(sqlite3.connect(path.parent / "queue-jobs.sqlite3", timeout=0.5)) as database:
+    with database:
         database.execute("CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, exit_code INTEGER NOT NULL)")
         database.execute("""CREATE TABLE IF NOT EXISTS pending_jobs (
-            id TEXT PRIMARY KEY, mode TEXT NOT NULL, scheduled_at TEXT NOT NULL
+            id TEXT PRIMARY KEY, mode TEXT NOT NULL, scheduled_at TEXT NOT NULL,
+            acknowledged INTEGER NOT NULL DEFAULT 0
         )""")
+        columns = {column[1] for column in database.execute("PRAGMA table_info(pending_jobs)")}
+        if "acknowledged" not in columns:
+            database.execute("ALTER TABLE pending_jobs ADD COLUMN acknowledged INTEGER NOT NULL DEFAULT 0")
+        # A redelivered job from an earlier Korean date is discarded before execution.
+        database.execute(
+            "DELETE FROM jobs WHERE date(substr(id, instr(id, ':') + 1), '+9 hours') < ?",
+            (datetime.now(KST).date().isoformat(),),
+        )
+        database.commit()
         if not lock_jobs(database):
             return 0
         pending = database.execute("SELECT id FROM pending_jobs ORDER BY scheduled_at LIMIT 1").fetchone()
@@ -298,6 +341,7 @@ def poll(path):
         if database.execute("SELECT 1 FROM jobs WHERE id = ?", (job_id,)).fetchone():
             log("queue_job_already_processed", job_id)
             queue.ack(lease)
+            database.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
             return 0
 
         if missing_upload_credentials(mode, values):
@@ -310,6 +354,8 @@ def poll(path):
                          (job_id, mode, scheduled_at.isoformat()))
         database.commit()
         queue.ack(lease)
+        database.execute("UPDATE pending_jobs SET acknowledged = 1 WHERE id = ?", (job_id,))
+        database.commit()
         if not lock_jobs(database):
             return 0
         return run_pending(database, values, job_id, checkout, resumed=False)
