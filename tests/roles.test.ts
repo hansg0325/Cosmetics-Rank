@@ -41,6 +41,38 @@ function request(
 }
 
 describe("조회 사용자와 관리자 권한", () => {
+  it("같은 출처의 관리자 요청만 Windows 수집기가 읽을 작업을 큐에 등록한다", async () => {
+    const send = vi.fn(async () => {});
+    const COLLECTION_QUEUE = { send } as unknown as Queue;
+    const origin = "https://rank.example.com";
+    const enqueue = (email: string, requestOrigin = origin) =>
+      app.request(
+        origin + "/api/admin/collector/queue",
+        {
+          method: "POST",
+          headers: {
+            origin: requestOrigin,
+            "cf-access-jwt-assertion": "email:" + email,
+          },
+        },
+        { ...bindings, COLLECTION_QUEUE },
+      );
+
+    expect((await enqueue("reader@example.com")).status).toBe(403);
+    expect((await enqueue("owner@example.com", "https://other.example.com")).status).toBe(403);
+    expect(send).not.toHaveBeenCalled();
+
+    const response = await enqueue("owner@example.com");
+    expect(response.status).toBe(202);
+    const { jobId } = await response.json<{ jobId: string }>();
+    const scheduledAt = jobId.slice("collection:".length);
+    expect(new Date(scheduledAt).toISOString()).toBe(scheduledAt);
+    expect(send).toHaveBeenCalledExactlyOnceWith(
+      { version: 1, jobId: `collection:${scheduledAt}`, mode: "collection", scheduledAt },
+      { contentType: "json" },
+    );
+  });
+
   it("방문자는 로그인 없이 조회하며 관리자만 관리자 세션에 접근한다", async () => {
     expect(
       await (await request("/api/admin/session", "owner@example.com")).json(),

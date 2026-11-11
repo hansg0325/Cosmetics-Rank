@@ -43,12 +43,13 @@ async function api<T = unknown>(path: string, body?: unknown): Promise<T> {
   );
   const data = (await r.json()) as {
     error?: string;
+    message?: string;
     count?: number;
     details?: unknown;
   };
   if (!r.ok)
     throw new Error(
-      data.error +
+      (data.message ?? data.error) +
         (data.count !== undefined ? ` (${data.count}/100)` : "") +
         (data.details ? ": " + JSON.stringify(data.details) : ""),
     );
@@ -178,16 +179,19 @@ function App() {
   async function collectNow() {
     if (busy || collectionLock.current) return;
     collectionLock.current = true;
-    if (!localApp) {
-      window.open("https://github.com/hansg0325/Cosmetics-Rank/actions/workflows/daily-collection.yml", "_blank", "noopener,noreferrer");
-      setMessage("GitHub Actions에서 Run workflow를 눌러 수집을 시작하세요.");
-      return;
-    }
     setBusy(true);
-    setMessage(
-      `${collectionCategories[localCollectionCategory].name} 랭킹을 불러오는 중…`,
-    );
     try {
+      if (!localApp) {
+        setMessage("수집 요청을 등록하는 중…");
+        await api("admin/collector/queue", {});
+        setMessage(
+          "전체 10개 카테고리 수집 요청을 등록했습니다. 수집 PC가 켜져 있고 Windows에 로그인되어 있으면 다음 확인 때 작업을 받습니다.",
+        );
+        return;
+      }
+      setMessage(
+        `${collectionCategories[localCollectionCategory].name} 랭킹을 불러오는 중…`,
+      );
       const targets = [localCollectionCategory];
       const failed: string[] = [];
       let completed = 0;
@@ -349,7 +353,11 @@ function App() {
               disabled={busy}
               onClick={() => void collectNow()}
             >
-              {busy ? "데이터 수집 중…" : "데이터 수집"}
+              {busy
+                ? localApp
+                  ? "데이터 수집 중…"
+                  : "수집 요청 중…"
+                : "데이터 수집"}
             </button>
           </article>
         )}

@@ -2,5 +2,6 @@
   "name":"cosmetics-rank", "main":"src/worker/index.ts", "compatibility_date":"2026-11-04",
   "assets":{"directory":"./dist","binding":"ASSETS","not_found_handling":"single-page-application","run_worker_first":true},
   "d1_databases":[{"binding":"DB","database_name":"cosmetics-rank","database_id":"78bc20a5-d4be-4abb-b322-9f0005179987","migrations_dir":"migrations"}],
+  "queues":{"producers":[{"binding":"COLLECTION_QUEUE","queue":"cosmetics-rank-collection"}]},
   "observability":{"enabled":true}
 }

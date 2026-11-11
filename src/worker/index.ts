@@ -11,6 +11,7 @@ import analytics from "./analytics";
 type Env = {
   DB: D1Database;
   ASSETS: Fetcher;
+  COLLECTION_QUEUE?: Queue;
   LOCAL_DEV_TOKEN?: string;
   COLLECTION_API_KEY?: string;
   ACCESS_TEAM?: string;
@@ -205,6 +206,40 @@ app.post("/api/settings/keywords", async (c) => {
     .bind(JSON.stringify(rules))
     .run();
   return c.json({ saved: true });
+});
+app.post("/api/admin/collector/queue", async (c) => {
+  const queue = c.env.COLLECTION_QUEUE;
+  if (!queue)
+    return c.json(
+      {
+        error: "COLLECTION_QUEUE_UNAVAILABLE",
+        message: "수집 큐가 연결되어 있지 않습니다.",
+      },
+      503,
+    );
+
+  const scheduledAt = new Date().toISOString();
+  const job = {
+    version: 1,
+    jobId: `collection:${scheduledAt}`,
+    mode: "collection",
+    scheduledAt,
+  };
+  try {
+    await queue.send(job, { contentType: "json" });
+  } catch {
+    console.error("manual_collection_enqueue_failed", job.jobId);
+    return c.json(
+      {
+        error: "COLLECTION_ENQUEUE_FAILED",
+        message: "수집 요청을 등록하지 못했습니다.",
+      },
+      503,
+    );
+  }
+
+  console.log({ event: "manual_collection_enqueued", ...job });
+  return c.json({ jobId: job.jobId }, 202);
 });
 app.route("/api/admin/collector", collector);
 app.get("/api/categories", async (c) =>
