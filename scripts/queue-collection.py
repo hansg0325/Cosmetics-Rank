@@ -18,7 +18,7 @@ from urllib.error import HTTPError
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
-ROOT = Path(__file__).resolve().parent.parent
+COLLECTOR_REPOSITORY = "https://github.com/hansg0325/Cosmetics-Rank.git"
 KST = timezone(timedelta(hours=9))
 COLLECTION_ORIGIN = "https://cosmetics-rank.hansg0325.workers.dev"
 UPLOAD_SECRETS = ("COLLECTION_API_KEY", "CF_ACCESS_CLIENT_ID", "CF_ACCESS_CLIENT_SECRET")
@@ -174,12 +174,33 @@ def log(event, job_id=None, **fields):
                       "event": event, "jobId": job_id, **fields}), flush=True)
 
 
-def run_collection(values):
+def sync_collection_source(checkout):
+    checkout.mkdir(parents=True, exist_ok=True)
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GCM_INTERACTIVE": "never"}
+
+    def git(*args):
+        return subprocess.check_output(
+            ["git", "-C", str(checkout), *args],
+            env=env,
+            stdin=subprocess.DEVNULL,
+            timeout=120,
+            text=True,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        ).strip()
+
+    if not (checkout / ".git").is_dir():
+        git("init", "--quiet")
+    git("fetch", "--quiet", "--depth=1", "--no-tags", COLLECTOR_REPOSITORY, "refs/heads/main")
+    git("checkout", "--quiet", "--detach", "FETCH_HEAD")
+    return git("rev-parse", "HEAD")
+
+
+def run_collection(values, checkout):
     child_env = {**os.environ, **{name: values[name] for name in UPLOAD_SECRETS},
                  "COLLECTION_ORIGIN": COLLECTION_ORIGIN, "PYTHONIOENCODING": "utf-8"}
     try:
         result = subprocess.run([sys.executable, "-u", "scripts/daily-collection.py", "--category", "all"],
-                                cwd=ROOT, env=child_env, timeout=COLLECTOR_TIMEOUT,
+                                cwd=checkout, env=child_env, timeout=COLLECTOR_TIMEOUT,
                                 stdin=subprocess.DEVNULL, stdout=sys.stdout, stderr=subprocess.STDOUT,
                                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         return result.returncode
@@ -208,7 +229,7 @@ def missing_upload_credentials(mode, values):
     return mode == "collection" and any(not values.get(name) for name in UPLOAD_SECRETS)
 
 
-def run_pending(database, values, job_id, *, resumed):
+def run_pending(database, values, job_id, checkout, *, resumed):
     # Keep the write lock while the child is running, so another poll cannot run it concurrently.
     pending = database.execute(
         "SELECT mode, scheduled_at FROM pending_jobs WHERE id = ?", (job_id,),
@@ -224,8 +245,17 @@ def run_pending(database, values, job_id, *, resumed):
     if missing_upload_credentials(mode, values):
         log("collection_credentials_missing", job_id)
         return 1
-    log("queue_job_resumed" if resumed else "queue_job_started", job_id)
-    exit_code = run_collection(values) if mode == "collection" else 0
+    exit_code = 0
+    if mode == "collection":
+        try:
+            revision = sync_collection_source(checkout)
+        except (OSError, subprocess.SubprocessError) as error:
+            log("collection_source_sync_failed", job_id, error=str(error))
+            return 1
+        log("queue_job_resumed" if resumed else "queue_job_started", job_id, revision=revision)
+        exit_code = run_collection(values, checkout)
+    else:
+        log("queue_job_resumed" if resumed else "queue_job_started", job_id)
     database.execute("INSERT INTO jobs (id, exit_code) VALUES (?, ?)", (job_id, exit_code))
     database.execute("DELETE FROM pending_jobs WHERE id = ?", (job_id,))
     database.commit()
@@ -235,6 +265,7 @@ def run_pending(database, values, job_id, *, resumed):
 
 def poll(path):
     account_id, queue_id, values = load_config(path)
+    checkout = path.parent / "collector-source"
     with closing(sqlite3.connect(path.parent / "queue-jobs.sqlite3", timeout=0.5)) as database:
         database.execute("CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, exit_code INTEGER NOT NULL)")
         database.execute("""CREATE TABLE IF NOT EXISTS pending_jobs (
@@ -244,7 +275,7 @@ def poll(path):
             return 0
         pending = database.execute("SELECT id FROM pending_jobs ORDER BY scheduled_at LIMIT 1").fetchone()
         if pending:
-            return run_pending(database, values, pending[0], resumed=True)
+            return run_pending(database, values, pending[0], checkout, resumed=True)
 
         queue = Queue(account_id, queue_id, values[QUEUE_SECRET])
         messages = queue.pull()
@@ -281,7 +312,7 @@ def poll(path):
         queue.ack(lease)
         if not lock_jobs(database):
             return 0
-        return run_pending(database, values, job_id, resumed=False)
+        return run_pending(database, values, job_id, checkout, resumed=False)
 
 
 def main():
