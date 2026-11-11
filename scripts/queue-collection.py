@@ -25,7 +25,7 @@ UPLOAD_SECRETS = ("COLLECTION_API_KEY", "CF_ACCESS_CLIENT_ID", "CF_ACCESS_CLIENT
 QUEUE_SECRET = "CLOUDFLARE_QUEUES_TOKEN"
 API_TIMEOUT = 20
 COLLECTOR_TIMEOUT = 5 * 60 * 60
-LEASE_MS = 6 * 60 * 60 * 1000
+LEASE_MS = 2 * 60 * 1000
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -180,24 +180,73 @@ def run_collection(values):
     try:
         result = subprocess.run([sys.executable, "-u", "scripts/daily-collection.py", "--category", "all"],
                                 cwd=ROOT, env=child_env, timeout=COLLECTOR_TIMEOUT,
+                                stdin=subprocess.DEVNULL, stdout=sys.stdout, stderr=subprocess.STDOUT,
                                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         return result.returncode
     except subprocess.TimeoutExpired:
         return 124
 
 
+def lock_jobs(database):
+    try:
+        database.execute("BEGIN IMMEDIATE")
+        return True
+    except sqlite3.OperationalError as error:
+        if error.sqlite_errorcode == sqlite3.SQLITE_BUSY:
+            return False
+        raise
+
+
+def job_expired(mode, scheduled_at):
+    now = datetime.now(KST)
+    return (scheduled_at.astimezone(KST).date() != now.date() or
+            scheduled_at > now + timedelta(minutes=2) or
+            (mode == "smoke" and now - scheduled_at > timedelta(minutes=20)))
+
+
+def missing_upload_credentials(mode, values):
+    return mode == "collection" and any(not values.get(name) for name in UPLOAD_SECRETS)
+
+
+def run_pending(database, values, job_id, *, resumed):
+    # Keep the write lock while the child is running, so another poll cannot run it concurrently.
+    pending = database.execute(
+        "SELECT mode, scheduled_at FROM pending_jobs WHERE id = ?", (job_id,),
+    ).fetchone()
+    if not pending:
+        return 0
+    mode, scheduled_at = pending
+    if job_expired(mode, datetime.fromisoformat(scheduled_at)):
+        database.execute("DELETE FROM pending_jobs WHERE id = ?", (job_id,))
+        database.commit()
+        log("queue_job_expired", job_id)
+        return 0
+    if missing_upload_credentials(mode, values):
+        log("collection_credentials_missing", job_id)
+        return 1
+    log("queue_job_resumed" if resumed else "queue_job_started", job_id)
+    exit_code = run_collection(values) if mode == "collection" else 0
+    database.execute("INSERT INTO jobs (id, exit_code) VALUES (?, ?)", (job_id, exit_code))
+    database.execute("DELETE FROM pending_jobs WHERE id = ?", (job_id,))
+    database.commit()
+    log("queue_job_failed" if exit_code else "queue_job_completed", job_id, exitCode=exit_code)
+    return exit_code
+
+
 def poll(path):
     account_id, queue_id, values = load_config(path)
-    queue = Queue(account_id, queue_id, values[QUEUE_SECRET])
     with closing(sqlite3.connect(path.parent / "queue-jobs.sqlite3", timeout=0.5)) as database:
         database.execute("CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, exit_code INTEGER NOT NULL)")
-        try:
-            # One local poller owns the lease and records the result before acknowledging it.
-            database.execute("BEGIN IMMEDIATE")
-        except sqlite3.OperationalError as error:
-            if error.sqlite_errorcode == sqlite3.SQLITE_BUSY:
-                return 0
-            raise
+        database.execute("""CREATE TABLE IF NOT EXISTS pending_jobs (
+            id TEXT PRIMARY KEY, mode TEXT NOT NULL, scheduled_at TEXT NOT NULL
+        )""")
+        if not lock_jobs(database):
+            return 0
+        pending = database.execute("SELECT id FROM pending_jobs ORDER BY scheduled_at LIMIT 1").fetchone()
+        if pending:
+            return run_pending(database, values, pending[0], resumed=True)
+
+        queue = Queue(account_id, queue_id, values[QUEUE_SECRET])
         messages = queue.pull()
         if not messages:
             return 0
@@ -210,10 +259,7 @@ def poll(path):
             queue.ack(lease)
             return 1
 
-        now = datetime.now(KST)
-        if (scheduled_at.astimezone(KST).date() != now.date() or
-                scheduled_at > now + timedelta(minutes=2) or
-                (mode == "smoke" and now - scheduled_at > timedelta(minutes=20))):
+        if job_expired(mode, scheduled_at):
             log("queue_job_expired", job_id)
             queue.ack(lease)
             return 0
@@ -223,18 +269,19 @@ def poll(path):
             queue.ack(lease)
             return 0
 
-        if mode == "collection" and any(not values.get(name) for name in UPLOAD_SECRETS):
+        if missing_upload_credentials(mode, values):
             log("collection_credentials_missing", job_id)
             queue.retry(lease)
             return 1
 
-        log("queue_job_started", job_id)
-        exit_code = run_collection(values) if mode == "collection" else 0
-        database.execute("INSERT INTO jobs (id, exit_code) VALUES (?, ?)", (job_id, exit_code))
+        # Persist the job on this PC before removing it from the queue. A restart can then resume it.
+        database.execute("INSERT INTO pending_jobs (id, mode, scheduled_at) VALUES (?, ?, ?)",
+                         (job_id, mode, scheduled_at.isoformat()))
         database.commit()
         queue.ack(lease)
-        log("queue_job_failed" if exit_code else "queue_job_completed", job_id, exitCode=exit_code)
-        return exit_code
+        if not lock_jobs(database):
+            return 0
+        return run_pending(database, values, job_id, resumed=False)
 
 
 def main():

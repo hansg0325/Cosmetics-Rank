@@ -6,7 +6,7 @@ The PC must be awake and the Windows user who configured the collector must be s
 
 ## One-time setup
 
-1. Create `cosmetics-rank-collection` using `bash ./pnpmw exec wrangler queues create cosmetics-rank-collection --config wrangler.scheduler.jsonc`. Enable HTTP Pull with `bash ./pnpmw exec wrangler queues consumer http add cosmetics-rank-collection --config wrangler.scheduler.jsonc --batch-size 1 --visibility-timeout-secs 21600`. Find the queue ID with `wrangler queues info cosmetics-rank-collection`.
+1. Create `cosmetics-rank-collection` using `bash ./pnpmw exec wrangler queues create cosmetics-rank-collection --config wrangler.scheduler.jsonc`. Enable HTTP Pull with `bash ./pnpmw exec wrangler queues consumer http add cosmetics-rank-collection --config wrangler.scheduler.jsonc --batch-size 1 --visibility-timeout-secs 120`. Find the queue ID with `wrangler queues info cosmetics-rank-collection`.
 2. Create a Cloudflare API token with `Account → Queues → Edit`, scoped to the queue's account. Have the existing upload credentials ready: `COLLECTION_API_KEY`, `CF_ACCESS_CLIENT_ID`, and `CF_ACCESS_CLIENT_SECRET`.
 3. On the collector PC, open PowerShell in the repository and run `python scripts/queue-collection.py --configure --account-id ACCOUNT_ID --queue-id QUEUE_ID` using the Python executable you will register for the task. It prompts for each secret and saves them encrypted for the current Windows account under `%LOCALAPPDATA%\CosmeticsRank`. Add `--smoke-only` if you only have the queue token. Rerun without `--smoke-only` before enabling production collection.
 4. From the same Windows account, run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\register-queue-collector.ps1 -PythonExe 'C:\path\to\python.exe'`. The script checks for Python and Selenium, then registers **Cosmetics Rank Queue Collector**. The task starts at sign-in and repeats every minute without opening a console or overlapping an active collection.
@@ -17,6 +17,6 @@ The PC must be awake and the Windows user who configured the collector must be s
 2. Confirm the Worker logged `collection_job_enqueued` and `%LOCALAPPDATA%\CosmeticsRank\queue-collector.log` has a matching `queue_job_completed` entry with a `smoke:` job ID.
 3. Deploy `bash ./pnpmw exec wrangler deploy --config wrangler.scheduler.jsonc --env=""` to activate the 06:00 KST collection schedule. Confirm the next job starts and saves all categories in the local log and site collection history.
 
-The collector records completed attempts before acknowledging the queue message, so redelivery on the same PC does not restart an already recorded attempt. A failed attempt is logged with its exit code. If the PC shuts down mid-run, the unacknowledged message can become available again when its lease expires.
+The Windows collector saves the job locally before acknowledging it. If the PC shuts down mid-run, the next poll can restart that job on the same day. Completed job IDs prevent later redelivery from starting an already recorded attempt. The log includes the collector's output and the exit code for each completed attempt.
 
 To pause automatic collection, deploy `--env setup` and disable the Windows task if it must stop consuming existing messages. The GitHub `workflow_dispatch` entry remains available for manual collection.
