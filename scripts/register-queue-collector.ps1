@@ -47,18 +47,71 @@ try {
 $userId = [Security.Principal.WindowsIdentity]::GetCurrent().Name
 $launcher = Join-Path $PSScriptRoot 'queue-collector-launch.pyw'
 $arguments = '"{0}" "{1}" --config "{2}"' -f $launcher, $PythonExe, $ConfigPath
+$now = Get-Date
+$firstPoll = $now.Date.AddHours(5).AddMinutes(55)
+if ($firstPoll -le $now) {
+    $firstPoll = $firstPoll.AddDays(1)
+}
+$startBoundary = $firstPoll.ToString("yyyy-MM-dd'T'HH:mm:ss")
+$xmlUserId = [Security.SecurityElement]::Escape($userId)
+$xmlPythonw = [Security.SecurityElement]::Escape($pythonw)
+$xmlArguments = [Security.SecurityElement]::Escape($arguments)
+$xmlWorkingDirectory = [Security.SecurityElement]::Escape($repoRoot)
+$xmlDescription = [Security.SecurityElement]::Escape('Poll the Cloudflare queue from 05:55 to 06:30 local time.')
+$taskXml = @"
+<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>$xmlDescription</Description>
+  </RegistrationInfo>
+  <Triggers>
+    <CalendarTrigger>
+      <StartBoundary>$startBoundary</StartBoundary>
+      <Enabled>true</Enabled>
+      <Repetition>
+        <Interval>PT1M</Interval>
+        <Duration>PT35M</Duration>
+        <StopAtDurationEnd>false</StopAtDurationEnd>
+      </Repetition>
+      <ScheduleByDay>
+        <DaysInterval>1</DaysInterval>
+      </ScheduleByDay>
+    </CalendarTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="CollectorUser">
+      <UserId>$xmlUserId</UserId>
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>false</StartWhenAvailable>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <Hidden>false</Hidden>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <WakeToRun>false</WakeToRun>
+    <ExecutionTimeLimit>PT6H</ExecutionTimeLimit>
+    <Priority>7</Priority>
+  </Settings>
+  <Actions Context="CollectorUser">
+    <Exec>
+      <Command>$xmlPythonw</Command>
+      <Arguments>$xmlArguments</Arguments>
+      <WorkingDirectory>$xmlWorkingDirectory</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>
+"@
 
 if ($PSCmdlet.ShouldProcess($taskName, 'Register queue collector')) {
-    $action = New-ScheduledTaskAction -Execute $pythonw -Argument $arguments -WorkingDirectory $repoRoot
-    $periodic = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 1)
-    $logon = New-ScheduledTaskTrigger -AtLogOn -User $userId
-    $principal = New-ScheduledTaskPrincipal -UserId $userId -LogonType Interactive -RunLevel Limited
-    $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable `
-        -ExecutionTimeLimit (New-TimeSpan -Hours 6) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+    Register-ScheduledTask -TaskName $taskName -Xml $taskXml -Force | Out-Null
 
-    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger @($periodic, $logon) `
-        -Principal $principal -Settings $settings -Description 'Poll the Cloudflare queue and collect rankings.' -Force | Out-Null
-
-    Write-Output "Registered: $taskName (polls every minute while signed in)"
+    Write-Output "Registered: $taskName (polls every minute from 05:55 through 06:30 local time)"
     Write-Output "Log: $(Join-Path (Split-Path -Parent $ConfigPath) 'queue-collector.log')"
 }
