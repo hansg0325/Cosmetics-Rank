@@ -196,7 +196,13 @@ function SeriesLoader({
           "rank-series?" + query,
           controller.signal,
         );
-        const series = result.series;
+        const seriesById = new Map(
+          result.series.map((item) => [item.id, item]),
+        );
+        const series = ids.flatMap((id) => {
+          const item = seriesById.get(id);
+          return item ? [item] : [];
+        });
         if (!ignored) setState({ key, series, error: "" });
       } catch (e) {
         if (!ignored) setState({ key, series: [], error: String(e) });
