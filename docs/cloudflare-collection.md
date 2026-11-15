@@ -21,6 +21,6 @@ To update an already-configured collector PC, pull the latest `main` and rerun t
 
 The Windows collector saves the job locally before acknowledging it. If the PC shuts down mid-run, the next poll can restart that job on the same day. Completed job IDs prevent later redelivery from starting an already recorded attempt. The log includes the collector's output and the exit code for each completed attempt.
 
-On the deployed site, sign in as an administrator and select **관리자 → 데이터 수집** to enqueue an all-category job in the same Cloudflare queue. If the request is made from 05:55 through 06:30 local time, the Windows collector picks it up on its next poll; otherwise it waits for the next day's polling window. The GitHub `workflow_dispatch` entry remains available as a fallback.
+On the deployed site, sign in as an administrator and select **관리자 → 데이터 수집** to enqueue an all-category job in the same Cloudflare queue. If the request is made from 05:55 through 06:30 local time, the Windows collector picks it up on its next poll; otherwise it waits for the next day's polling window.
 
 To pause automatic collection, deploy `--env setup` and disable the Windows task if it must stop consuming existing messages.

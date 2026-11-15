@@ -217,7 +217,7 @@ def collect_category(category, rules, categories):
     return json.loads(capture_line.split(" ", 1)[1])
 
 def save_snapshot(category, capture, rows):
-    source_ref = "selenium:github:" + hashlib.sha256(
+    source_ref = "selenium:collector:" + hashlib.sha256(
         json.dumps(rows, sort_keys=True).encode()
     ).hexdigest()
     start_payload = {

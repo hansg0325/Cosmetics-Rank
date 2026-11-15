@@ -12,11 +12,11 @@ README 빠른 시작을 따릅니다. `.dev.vars.example`은 형식 예시이고
 2. `pnpm exec wrangler login`으로 계정에 로그인합니다. APAC 리전의 원격 D1 `cosmetics-rank`는 생성됐고 반환된 ID를 `wrangler.jsonc`에 설정했습니다. 새 Cloudflare 계정에서 다시 배포할 경우 해당 계정의 D1을 새로 만들어 ID를 교체해야 합니다.
 3. 기존 Cloudflare Access 앱의 Worker 대상은 미리보기 URL로 제한하고, 운영 호스트에는 아래 경로를 공개 호스트 대상에 추가합니다.
    - `/admin`, `/api/admin/*`: Access 로그인 후 Worker가 관리자 이메일을 확인합니다.
-   - `/api/imports`, `/api/imports/*`: 기존 수집용 Service Auth 정책을 유지합니다. Actions에는 Service Auth 자격 증명과 `COLLECTION_API_KEY`가 모두 필요합니다.
+   - `/api/imports`, `/api/imports/*`: 기존 수집용 Service Auth 정책을 유지합니다. Windows 수집기에는 Service Auth 자격 증명과 `COLLECTION_API_KEY`가 모두 필요합니다.
    일반 사이트, 조회 API, 키워드 저장은 Access 로그인 없이 사용합니다. 이외의 변경은 Worker에서 권한을 확인합니다.
 4. `ACCESS_TEAM`(팀 슬러그), `ACCESS_AUD`(관리자 경로 Access 앱 audience), `ALLOWED_EMAIL`(관리자 이메일)을 Worker secret으로 설정합니다. `VIEWER_EMAILS`는 사용하지 않습니다. 로컬 토큰을 원격 secret으로 등록하지 마세요. `/api/admin/*`는 유효한 관리자 JWT가 없으면 거부됩니다.
 5. `pnpm exec wrangler d1 migrations apply cosmetics-rank --remote`, `pnpm build`, `pnpm exec wrangler deploy` 순서로 배포합니다.
-6. 시크릿 브라우저에서 루트/GET API가 로그인 없이 조회되는지, 변경 API가 거부되는지, 관리자 탭 클릭 시 Cloudflare 로그인으로 이동하는지, 비관리자 이메일은 관리자 기능에 들어갈 수 없는지, GitHub Actions Service Auth로 수집만 가능한지 확인합니다. 로컬 검증은 원격 Access 정책 검증을 대신하지 않습니다.
+6. 시크릿 브라우저에서 루트/GET API가 로그인 없이 조회되는지, 변경 API가 거부되는지, 관리자 탭 클릭 시 Cloudflare 로그인으로 이동하는지, 비관리자 이메일은 관리자 기능에 들어갈 수 없는지, Windows 수집기가 Service Auth로 업로드할 수 있는지 확인합니다. 로컬 검증은 원격 Access 정책 검증을 대신하지 않습니다.
 
 비로그인 사용자는 대시보드·랭킹·순위 변동·상품 이력·점유율 분석·엑셀 내보내기·성분 키워드 설정을 사용할 수 있습니다. 키워드 추가·수정·저장도 방문자에게 허용됩니다. 수집 이력과 관리자 기능은 관리자 로그인 후 사용할 수 있습니다. 로컬 개발 서버는 관리자 권한으로 동작하며 외부에 공개하지 마세요.
 

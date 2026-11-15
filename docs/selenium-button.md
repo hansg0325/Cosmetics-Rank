@@ -47,7 +47,7 @@ API는 기존 Hono Worker, DB는 기존 D1 그대로입니다. Python은 PC의 C
 
 로컬 서비스는 127.0.0.1에만 바인딩하고 `.dev.vars`의 토큰을 Bearer 인증에 사용합니다. 토큰을 명령줄 인수나 로그에 출력하지 않습니다. 직접 브라우저에서 서비스에 접근하는 Origin 요청과 외부 Host 요청은 차단하고 CORS를 열지 않습니다. 브라우저는 기존 Hono 인증/CSRF 보호를 거친 API만 호출합니다.
 
-Worker의 수집 API는 localhost/loopback 주소이며 LOCAL_DEV_TOKEN이 있는 환경에서만 열립니다. 원격 workers.dev 배포에서는 사용할 수 없습니다. 이 PC가 꺼져 있으면 실행되지 않습니다. 유료 서비스, GitHub Actions, 예약 수집, 원격 Chrome은 추가하지 않았습니다.
+Worker의 수집 API는 localhost/loopback 주소이며 LOCAL_DEV_TOKEN이 있는 환경에서만 열립니다. 원격 workers.dev 배포에서는 사용할 수 없습니다. 이 PC가 꺼져 있으면 실행되지 않습니다.
 
 ## 파일
 
