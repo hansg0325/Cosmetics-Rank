@@ -1,8 +1,6 @@
 name: Hosted collector test
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '36 2 24 11 *'
 permissions:
   contents: read
 concurrency:
@@ -14,11 +12,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Record actual trigger and runner
-        env:
-          TEST_EXPIRES: '2026-11-24T03:26:41.622Z'
         run: |
           echo "event=$GITHUB_EVENT_NAME runner=$RUNNER_ENVIRONMENT utc=$(date -u +%FT%TZ)"
-          python -c "import os,datetime; assert datetime.datetime.now(datetime.timezone.utc) < datetime.datetime.fromisoformat(os.environ['TEST_EXPIRES'].replace('Z','+00:00')), 'Temporary test expired'"
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
