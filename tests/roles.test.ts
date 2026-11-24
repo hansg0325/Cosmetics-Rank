@@ -41,6 +41,40 @@ function request(
 }
 
 describe("조회 사용자와 관리자 권한", () => {
+  it("routes authorized collection to Cloudflare without enqueueing a PC job", async () => {
+    const cloudFetch = vi.fn(async (url: string, init?: RequestInit) => {
+      expect(url).toBe("https://collector/start");
+      expect(new Headers(init?.headers).get("authorization")).toBe(
+        "Bearer internal-test-token",
+      );
+      return Response.json({ jobId: "cloud-run" }, { status: 202 });
+    });
+    const send = vi.fn();
+    const env = {
+      ...bindings,
+      CLOUD_COLLECTOR: { fetch: cloudFetch } as unknown as Fetcher,
+      COLLECTOR_CONTROL_TOKEN: "internal-test-token",
+      COLLECTION_QUEUE: { send } as unknown as Queue,
+    };
+    const req = (email: string) =>
+      app.request(
+        "https://rank.example.com/api/admin/collector/queue",
+        {
+          method: "POST",
+          headers: {
+            origin: "https://rank.example.com",
+            "cf-access-jwt-assertion": `email:${email}`,
+          },
+        },
+        env,
+      );
+    expect((await req("viewer@example.com")).status).toBe(403);
+    expect(cloudFetch).not.toHaveBeenCalled();
+    const response = await req("owner@example.com");
+    expect(response.status).toBe(202);
+    expect(await response.json()).toEqual({ jobId: "cloud-run" });
+    expect(send).not.toHaveBeenCalled();
+  });
   it("같은 출처의 관리자 요청만 Windows 수집기가 읽을 작업을 큐에 등록한다", async () => {
     const send = vi.fn(async () => {});
     const COLLECTION_QUEUE = { send } as unknown as Queue;
@@ -59,7 +93,9 @@ describe("조회 사용자와 관리자 권한", () => {
       );
 
     expect((await enqueue("reader@example.com")).status).toBe(403);
-    expect((await enqueue("owner@example.com", "https://other.example.com")).status).toBe(403);
+    expect(
+      (await enqueue("owner@example.com", "https://other.example.com")).status,
+    ).toBe(403);
     expect(send).not.toHaveBeenCalled();
 
     const response = await enqueue("owner@example.com");
@@ -68,7 +104,12 @@ describe("조회 사용자와 관리자 권한", () => {
     const scheduledAt = jobId.slice("collection:".length);
     expect(new Date(scheduledAt).toISOString()).toBe(scheduledAt);
     expect(send).toHaveBeenCalledExactlyOnceWith(
-      { version: 1, jobId: `collection:${scheduledAt}`, mode: "collection", scheduledAt },
+      {
+        version: 1,
+        jobId: `collection:${scheduledAt}`,
+        mode: "collection",
+        scheduledAt,
+      },
       { contentType: "json" },
     );
   });
@@ -80,8 +121,12 @@ describe("조회 사용자와 관리자 권한", () => {
     expect(
       await (await request("/api/me", "READER@example.com")).json(),
     ).toEqual({ role: "viewer" });
-    expect(await (await request("/api/me", "")).json()).toEqual({ role: "viewer" });
-    expect((await request("/api/admin/session", "other@example.com")).status).toBe(403);
+    expect(await (await request("/api/me", "")).json()).toEqual({
+      role: "viewer",
+    });
+    expect(
+      (await request("/api/admin/session", "other@example.com")).status,
+    ).toBe(403);
   });
 
   it("방문자는 키워드를 수정할 수 있지만 수집·관리자 요청은 거부된다", async () => {
@@ -105,9 +150,8 @@ describe("조회 사용자와 관리자 권한", () => {
       prepare: () => ({ bind: () => ({ run: async () => ({}) }) }),
     } as unknown as D1Database;
     expect(
-      (
-        await request("/api/settings/keywords", "", "POST", [], keywordDb)
-      ).status,
+      (await request("/api/settings/keywords", "", "POST", [], keywordDb))
+        .status,
     ).toBe(200);
     expect((await request("/api/export-rankings", "")).status).toBe(403);
     expect((await request("/api/health", "reader@example.com")).status).toBe(

@@ -1,5 +1,6 @@
 import { formatCollectedAt } from "../shared/dateTime";
 import { AdminExport } from "./AdminExport";
+import { CloudCollectionPanel } from "./CloudCollectionPanel";
 import { invalidateDataCache, useData } from "./analyticsApi";
 import { MarketSharePanel } from "./MarketSharePanel";
 import { KeywordSettings } from "./KeywordSettings";
@@ -78,7 +79,9 @@ function App() {
   const loadRuns = async (index: number) => {
     setRunsLoading(true);
     try {
-      const rows = await api<Run[]>(`admin/imports?offset=${index * 20}&limit=21`);
+      const rows = await api<Run[]>(
+        `admin/imports?offset=${index * 20}&limit=21`,
+      );
       setRuns(rows.slice(0, 20));
       setHasNextRuns(rows.length > 20);
       setRunPage(index);
@@ -107,7 +110,9 @@ function App() {
         setRole("viewer");
         if (adminEntry) {
           window.history.replaceState(null, "", "/");
-          setMessage("관리자 로그인이 필요합니다. 다시 관리자 탭을 선택하세요.");
+          setMessage(
+            "관리자 로그인이 필요합니다. 다시 관리자 탭을 선택하세요.",
+          );
         } else {
           setMessage(String(e));
         }
@@ -185,7 +190,7 @@ function App() {
         setMessage("수집 요청을 등록하는 중…");
         await api("admin/collector/queue", {});
         setMessage(
-          "전체 10개 카테고리 수집 요청을 등록했습니다. 수집 PC가 켜져 있고 Windows에 로그인되어 있으면 다음 확인 때 작업을 받습니다.",
+          "Cloudflare에 수집을 요청했습니다. 브라우저 1개로 진행하며 수집 PC를 켜 둘 필요가 없습니다.",
         );
         return;
       }
@@ -325,6 +330,14 @@ function App() {
         {role === "admin" && page === "관리자" && (
           <article>
             <h2>랭킹 데이터 수집</h2>
+            {!localApp && (
+              <CloudCollectionPanel
+                onComplete={() => {
+                  invalidateDataCache();
+                  void refresh();
+                }}
+              />
+            )}
             {localApp && (
               <label className="local-collection-category">
                 수집 카테고리
@@ -345,9 +358,7 @@ function App() {
                 </select>
               </label>
             )}
-            {localApp && (
-              <p>이 PC의 로컬 DB에 선택한 카테고리만 저장합니다.</p>
-            )}
+            {localApp && <p>이 PC의 로컬 DB에 선택한 카테고리만 저장합니다.</p>}
             <button
               className="primary"
               disabled={busy}
@@ -430,9 +441,9 @@ function App() {
                                 ? "수집 중"
                                 : r.status === "PARTIAL"
                                   ? "부분 성공"
-                                : r.status === "CANCELLED"
-                                  ? "취소"
-                                  : r.status}
+                                  : r.status === "CANCELLED"
+                                    ? "취소"
+                                    : r.status}
                         </span>
                       </td>
                       <td>
@@ -456,13 +467,15 @@ function App() {
                         )}
                       </td>
                       <td>
-                        {r.source_ref?.startsWith("selenium:")
-                          ? "Selenium · 버튼 수집"
-                          : r.source_ref?.startsWith("browser:")
-                            ? "실제 랭킹 · 브라우저"
-                            : r.source_ref?.startsWith("fixture:")
-                              ? "가상 샘플"
-                              : "수동/샘플"}
+                        {r.source_ref?.startsWith("cloud:")
+                          ? "Cloudflare · 단일 브라우저"
+                          : r.source_ref?.startsWith("selenium:")
+                            ? "Selenium · 버튼 수집"
+                            : r.source_ref?.startsWith("browser:")
+                              ? "실제 랭킹 · 브라우저"
+                              : r.source_ref?.startsWith("fixture:")
+                                ? "가상 샘플"
+                                : "수동/샘플"}
                       </td>
                       <td>
                         {r.is_active ? "활성" : "—"}{" "}

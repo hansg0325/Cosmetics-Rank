@@ -1,29 +1,115 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "cosmetics-rank-scheduler",
-  "main": "src/scheduler/index.mjs",
-  "compatibility_date": "2026-11-04",
-  "workers_dev": false,
+  "main": "src/scheduler/index.ts",
+  "compatibility_date": "2026-11-24",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "workers_dev": true,
   "preview_urls": false,
-  "observability": { "enabled": true },
-  "vars": { "SCHEDULER_MODE": "collection" },
-  "triggers": { "crons": ["0 21 * * *"] },
-  "queues": {
-    "producers": [{ "binding": "COLLECTION_QUEUE", "queue": "cosmetics-rank-collection" }]
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "BILLING_ANCHOR_DAY": "8"
+  },
+  "browser": {
+    "binding": "BROWSER"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "COLLECTOR",
+        "class_name": "CloudCollector"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1-cloud-collector",
+      "new_sqlite_classes": [
+        "CloudCollector"
+      ]
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "cosmetics-rank",
+      "database_id": "78bc20a5-d4be-4abb-b322-9f0005179987"
+    }
+  ],
+  "rules": [
+    {
+      "type": "Text",
+      "globs": [
+        "**/*.browser.txt"
+      ],
+      "fallthrough": true
+    }
+  ],
+  "triggers": {
+    "crons": []
   },
   "env": {
-    "setup": {
+    "production": {
       "name": "cosmetics-rank-scheduler",
-      "vars": { "SCHEDULER_MODE": "setup" },
-      "triggers": { "crons": [] },
-      "queues": { "producers": [] }
+      "vars": {
+        "BILLING_ANCHOR_DAY": "8"
+      },
+      "browser": {
+        "binding": "BROWSER"
+      },
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "COLLECTOR",
+            "class_name": "CloudCollector"
+          }
+        ]
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "cosmetics-rank",
+          "database_id": "78bc20a5-d4be-4abb-b322-9f0005179987"
+        }
+      ],
+      "triggers": {
+        "crons": [
+          "0 21 * * *"
+        ]
+      }
     },
     "smoke": {
       "name": "cosmetics-rank-scheduler",
-      "vars": { "SCHEDULER_MODE": "smoke" },
-      "triggers": { "crons": ["*/5 * * * *"] },
-      "queues": {
-        "producers": [{ "binding": "COLLECTION_QUEUE", "queue": "cosmetics-rank-collection" }]
+      "browser": {
+        "binding": "BROWSER"
+      },
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "COLLECTOR",
+            "class_name": "CloudCollector"
+          }
+        ]
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "cosmetics-rank",
+          "database_id": "78bc20a5-d4be-4abb-b322-9f0005179987"
+        }
+      ],
+      "vars": {
+        "BILLING_ANCHOR_DAY": "8",
+        "SCHEDULE_SMOKE": "true"
+      },
+      "triggers": {
+        "crons": [
+          "* * * * *"
+        ]
       }
     }
   }

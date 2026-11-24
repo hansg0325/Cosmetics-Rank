@@ -12,11 +12,12 @@ function extract(
   tables = fixture.tables,
   id = fixture.product_id,
   scoped = true,
+  source = script,
 ) {
   const { document } = parseHTML(
     `<html><body><div ${scoped ? 'class="GoodsDetailInfo_goods-info__test"' : ""}><h3>${escape(fixture.product_name)}</h3><div>${escape(summary)}</div></div>상품설명<div>평점 4.2 리뷰 999건</div><table>${tables.map((r) => `<tr><th>${escape(r.label)}</th><td>${escape(r.text)}</td></tr>`).join("")}</table></body></html>`,
   );
-  return runInNewContext(`(function(){${script}}).apply(null, args)`, {
+  return runInNewContext(`(function(){${source}}).apply(null, args)`, {
     document,
     location: {
       href: `https://www.oliveyoung.co.kr/store/goods/getGoodsDetail.do?goodsNo=${id}`,
@@ -29,6 +30,27 @@ function extract(
   });
 }
 describe("한 상세페이지에서 모든 항목 추출", () => {
+  it("reads non-cosmetic manufacturer labels in the cloud collector", () => {
+    const cloud = readFileSync("src/scheduler/detail.browser.txt", "utf8");
+    for (const label of [
+      "수입자(수입제품에 한함), 제조국 및 제조사",
+      "제조업소의 명칭과 소재지",
+    ]) {
+      const result = extract(
+        fixture.summary,
+        [{ label, text: "제조국 : 대한민국 / 제조사 : 검증회사" }],
+        fixture.product_id,
+        true,
+        cloud,
+      );
+      expect(result).toMatchObject({
+        raw: "제조국 : 대한민국 / 제조사 : 검증회사",
+        cosmetic_disclosure: false,
+        ingredients: null,
+        review_status: "FOUND",
+      });
+    }
+  });
   it("보관된 실제 렌더링 원문에서 제조업자·성분·리뷰·평점을 함께 읽음", () => {
     const result = extract();
     expect(result).toMatchObject({

@@ -1,5 +1,7 @@
 # 실행과 운영
 
+현재 운영 수집은 Workers Paid의 Cloudflare Browser Run을 사용합니다. 예약과 요금 제한은 [클라우드 수집 운영 가이드](cloud-collector.md)가 최신 기준이며 아래 무료 초기 설정 및 수집 PC 설명은 과거 구성입니다.
+
 ## 로컬
 
 README 빠른 시작을 따릅니다. `.dev.vars.example`은 형식 예시이고 `pnpm setup:local`은 무작위 토큰을 생성합니다. 기존 토큰은 덮어쓰지 않습니다. `wrangler dev --ip 127.0.0.1`로 외부 인터페이스에 바인딩하지 않습니다. Wrangler 로컬 Explorer는 개발 환경에서 D1을 직접 조작할 수 있으므로 로컬 포트를 인터넷에 노출하지 마세요.
@@ -30,4 +32,4 @@ Workers 대시보드에서 업로드/완료/JWT 인증 경로의 CPU p50/p95/p99
 
 실데이터 변경 전 `pnpm exec wrangler d1 export cosmetics-rank --remote --output=backup.sql`로 로컬 백업합니다. 월 1회 오프라인 백업을 권장하며 backup 파일은 Git에서 제외합니다. D1 Free Time Travel의 보존기간은 [공식 한도](https://developers.cloudflare.com/d1/platform/limits/)에서 확인합니다. 로컬 데이터 복원도 별도 환경에서 검증한 후 원격에 적용하세요.
 
-자동 수집 허가는 확인하지 않았습니다. 크롤러, 우회, CAPTCHA 처리, Cron은 없습니다. 현재 상태는 `DISABLED_NO_APPROVED_SOURCE`이며 수동 CSV/XLSX와 가상 샘플만 사용합니다.
+운영에서는 매일 한국시간 오전 6시 클라우드 브라우저 수집을 실행합니다. 접속 제한이 감지되면 상세조회를 중단합니다. 우회나 CAPTCHA 처리는 하지 않습니다. CSV/XLSX와 로컬 수집 기능도 유지합니다.

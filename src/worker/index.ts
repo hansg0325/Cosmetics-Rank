@@ -12,6 +12,8 @@ type Env = {
   DB: D1Database;
   ASSETS: Fetcher;
   COLLECTION_QUEUE?: Queue;
+  CLOUD_COLLECTOR?: Fetcher;
+  COLLECTOR_CONTROL_TOKEN?: string;
   LOCAL_DEV_TOKEN?: string;
   COLLECTION_API_KEY?: string;
   ACCESS_TEAM?: string;
@@ -65,10 +67,20 @@ app.use("*", async (c, next) => {
     /^\/api\/imports(?:\/[^/]+\/(?:chunks|complete|cancel))?$/.test(
       url.pathname,
     );
-  if (machinePath && c.env.COLLECTION_API_KEY && c.req.header("authorization")) {
+  if (
+    machinePath &&
+    c.env.COLLECTION_API_KEY &&
+    c.req.header("authorization")
+  ) {
     const encoder = new TextEncoder();
-    const provided = await crypto.subtle.digest("SHA-256", encoder.encode(c.req.header("authorization")!));
-    const expected = await crypto.subtle.digest("SHA-256", encoder.encode(`Bearer ${c.env.COLLECTION_API_KEY}`));
+    const provided = await crypto.subtle.digest(
+      "SHA-256",
+      encoder.encode(c.req.header("authorization")!),
+    );
+    const expected = await crypto.subtle.digest(
+      "SHA-256",
+      encoder.encode(`Bearer ${c.env.COLLECTION_API_KEY}`),
+    );
     collectionApiAuthorized = timingSafeEqual(
       new Uint8Array(provided),
       new Uint8Array(expected),
@@ -89,11 +101,10 @@ app.use("*", async (c, next) => {
         keys = createRemoteJWKSet(new URL(issuer + "/cdn-cgi/access/certs"));
         keysets.set(issuer, keys);
       }
-      const { payload } = await jwtVerify(
-        accessAssertion,
-        keys,
-        { issuer, audience: c.env.ACCESS_AUD },
-      );
+      const { payload } = await jwtVerify(accessAssertion, keys, {
+        issuer,
+        audience: c.env.ACCESS_AUD,
+      });
       const email =
         typeof payload.email === "string" ? payload.email.toLowerCase() : "";
       const adminEmail = c.env.ALLOWED_EMAIL.trim().toLowerCase();
@@ -104,7 +115,10 @@ app.use("*", async (c, next) => {
   }
   c.set("role", role);
   c.set("collectionApiAuthorized", collectionApiAuthorized);
-  if ((url.pathname === "/admin" || url.pathname === "/admin/") && role !== "admin")
+  if (
+    (url.pathname === "/admin" || url.pathname === "/admin/") &&
+    role !== "admin"
+  )
     return c.text("관리자 권한이 필요합니다.", 403);
   if (c.req.method === "POST" && c.req.header("origin") !== url.origin)
     return c.json({ error: "INVALID_ORIGIN" }, 403);
@@ -208,6 +222,13 @@ app.post("/api/settings/keywords", async (c) => {
   return c.json({ saved: true });
 });
 app.post("/api/admin/collector/queue", async (c) => {
+  if (c.env.CLOUD_COLLECTOR && c.env.COLLECTOR_CONTROL_TOKEN) {
+    return c.env.CLOUD_COLLECTOR.fetch("https://collector/start", {
+      method: "POST",
+      headers: { authorization: `Bearer ${c.env.COLLECTOR_CONTROL_TOKEN}` },
+      body: "{}",
+    });
+  }
   const queue = c.env.COLLECTION_QUEUE;
   if (!queue)
     return c.json(
@@ -240,6 +261,34 @@ app.post("/api/admin/collector/queue", async (c) => {
 
   console.log({ event: "manual_collection_enqueued", ...job });
   return c.json({ jobId: job.jobId }, 202);
+});
+app.get("/api/admin/cloud-collector", async (c) => {
+  if (!c.env.CLOUD_COLLECTOR || !c.env.COLLECTOR_CONTROL_TOKEN)
+    return c.json({ error: "UNAVAILABLE" }, 503);
+  return c.env.CLOUD_COLLECTOR.fetch("https://collector/status", {
+    headers: { authorization: `Bearer ${c.env.COLLECTOR_CONTROL_TOKEN}` },
+  });
+});
+app.post("/api/admin/cloud-collector/cancel", async (c) => {
+  if (!c.env.CLOUD_COLLECTOR || !c.env.COLLECTOR_CONTROL_TOKEN)
+    return c.json({ error: "UNAVAILABLE" }, 503);
+  return c.env.CLOUD_COLLECTOR.fetch("https://collector/cancel", {
+    method: "POST",
+    headers: { authorization: `Bearer ${c.env.COLLECTOR_CONTROL_TOKEN}` },
+  });
+});
+app.post("/api/admin/cloud-collector/resume", async (c) => {
+  if (!c.env.CLOUD_COLLECTOR || !c.env.COLLECTOR_CONTROL_TOKEN)
+    return c.json({ error: "UNAVAILABLE" }, 503);
+  const input = z
+    .object({ id: z.string().uuid() })
+    .strict()
+    .parse(await c.req.json());
+  return c.env.CLOUD_COLLECTOR.fetch("https://collector/resume", {
+    method: "POST",
+    headers: { authorization: `Bearer ${c.env.COLLECTOR_CONTROL_TOKEN}` },
+    body: JSON.stringify(input),
+  });
 });
 app.route("/api/admin/collector", collector);
 app.get("/api/categories", async (c) =>
@@ -279,13 +328,14 @@ app.post("/api/imports", async (c) => {
   const p = startSchema.parse(await c.req.json());
   const db = c.env.DB;
   const detail = p.detail_summary;
-  const detailStatus = !detail || detail.total === 0
-    ? "NOT_COLLECTED"
-    : detail.succeeded === detail.total
-      ? "COMPLETE"
-      : detail.succeeded === 0
-        ? "FAILED"
-        : "PARTIAL";
+  const detailStatus =
+    !detail || detail.total === 0
+      ? "NOT_COLLECTED"
+      : detail.succeeded === detail.total
+        ? "COMPLETE"
+        : detail.succeeded === 0
+          ? "FAILED"
+          : "PARTIAL";
   const updateDetailSummary = async (runId: string) => {
     if (!detail) return;
     await db
@@ -517,45 +567,49 @@ app.post("/api/imports/:id/complete", async (c) => {
   invalidateReadCache();
   return c.json({ status: "COMPLETE" });
 });
-app.on("POST", ["/api/imports/:id/cancel", "/api/admin/imports/:id/cancel"], async (c) => {
-  const id = idSchema.parse(c.req.param("id"));
-  const p = z
-    .object({ failed: z.boolean().default(false) })
-    .strict()
-    .parse(await c.req.json());
-  const db = c.env.DB;
-  const run = await db
-    .prepare("SELECT status FROM ingestion_runs WHERE id=?")
-    .bind(id)
-    .first<{ status: string }>();
-  if (!run) return c.json({ error: "NOT_FOUND" }, 404);
-  if (run.status === "COMPLETE")
-    return c.json({ error: "ALREADY_COMPLETE" }, 409);
-  await db.batch([
-    db
-      .prepare(
-        "UPDATE snapshots SET status='FAILED' WHERE ingestion_run_id=? AND status='IMPORTING'",
-      )
-      .bind(id),
-    db
-      .prepare(
-        "UPDATE ingestion_runs SET status=?,finished_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),error_message=? WHERE id=? AND status='RUNNING'",
-      )
-      .bind(
-        p.failed ? "FAILED" : "CANCELLED",
-        p.failed ? "클라이언트 업로드 실패" : null,
-        id,
-      ),
-  ]);
-  const final = await db
-    .prepare("SELECT status FROM ingestion_runs WHERE id=?")
-    .bind(id)
-    .first<{ status: string }>();
-  if (final?.status === "COMPLETE")
-    return c.json({ error: "ALREADY_COMPLETE" }, 409);
-  invalidateReadCache();
-  return c.json({ status: final?.status });
-});
+app.on(
+  "POST",
+  ["/api/imports/:id/cancel", "/api/admin/imports/:id/cancel"],
+  async (c) => {
+    const id = idSchema.parse(c.req.param("id"));
+    const p = z
+      .object({ failed: z.boolean().default(false) })
+      .strict()
+      .parse(await c.req.json());
+    const db = c.env.DB;
+    const run = await db
+      .prepare("SELECT status FROM ingestion_runs WHERE id=?")
+      .bind(id)
+      .first<{ status: string }>();
+    if (!run) return c.json({ error: "NOT_FOUND" }, 404);
+    if (run.status === "COMPLETE")
+      return c.json({ error: "ALREADY_COMPLETE" }, 409);
+    await db.batch([
+      db
+        .prepare(
+          "UPDATE snapshots SET status='FAILED' WHERE ingestion_run_id=? AND status='IMPORTING'",
+        )
+        .bind(id),
+      db
+        .prepare(
+          "UPDATE ingestion_runs SET status=?,finished_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),error_message=? WHERE id=? AND status='RUNNING'",
+        )
+        .bind(
+          p.failed ? "FAILED" : "CANCELLED",
+          p.failed ? "클라이언트 업로드 실패" : null,
+          id,
+        ),
+    ]);
+    const final = await db
+      .prepare("SELECT status FROM ingestion_runs WHERE id=?")
+      .bind(id)
+      .first<{ status: string }>();
+    if (final?.status === "COMPLETE")
+      return c.json({ error: "ALREADY_COMPLETE" }, 409);
+    invalidateReadCache();
+    return c.json({ status: final?.status });
+  },
+);
 app.all("/api/*", (c) => c.json({ error: "NOT_FOUND" }, 404));
 app.all("*", (c) => c.env.ASSETS.fetch(c.req.raw));
 export default app;

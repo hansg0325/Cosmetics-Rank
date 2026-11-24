@@ -36,6 +36,8 @@ Python 수집기 테스트는 `tests/test_*.py`에 있습니다. `pnpm test:smok
 
 ## 배포 상태
 
+운영 수집은 수집 PC 없이 Cloudflare 브라우저 1개로 실행합니다. 매일 오전 6시 예약, 상세정보 재사용, 사용량 제한과 종료 처리의 설정은 [클라우드 수집 운영 가이드](docs/cloud-collector.md)를 참고하세요.
+
 별도 Windows PC를 수집기로 등록할 때는 [수집 PC 설정 가이드](docs/collector-pc-setup.md)를 따르세요. 새 PC의 Codex에 붙여넣을 요청도 들어 있습니다.
 
 Cloudflare Worker와 원격 D1은 배포되어 있습니다. 일반 방문자는 로그인 없이 조회하고 성분 키워드를 편집할 수 있습니다. `/admin`과 `/api/admin/*`에는 Cloudflare Access가 적용되며 Worker가 관리자 이메일을 확인합니다. Windows 수집기는 `/api/imports` 및 하위 경로에서 Service Auth와 API 키를 사용합니다. 절차와 제한은 [운영 가이드](docs/operations.md)를 참고하세요.
